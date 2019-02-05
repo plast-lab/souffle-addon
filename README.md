@@ -9,6 +9,7 @@ Dependencies:
  - Boost libraries
 
 Usage:
+
  $ make  # builds all, creates libfunctors.so as a link to libsoufflenum.so
  $ export LD_LIBRARY_PATH=`pwd`  # or wherever you want to put the resulting libfunctors.so
 
