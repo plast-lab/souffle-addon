@@ -10,11 +10,10 @@ Dependencies:
 
 Usage:
 
- $ make  # builds all, creates libfunctors.so as a link to libsoufflenum.so
- $ export LD_LIBRARY_PATH=`pwd`  # or wherever you want to put the resulting libfunctors.so
+    $ make                          # builds all, sets libfunctors.so as a link to libsoufflenum.so
+    $ export LD_LIBRARY_PATH=`pwd`  # or wherever you want to put the resulting libfunctors.so
 
-and use a Souffle program with the num256functors.dl definitions.
+and use a Souffle program with the num256functors.dl definitions. For compiled execution, libfunctors.so (i.e., at least a
+link to the real .so) should be in the compilation directory.
 
-A sample Souffle client program can be found under directory
-dlexample.  For compiled execution, libfunctors.so (i.e., at least a
-link to the functors .so) should be in the compilation directory.
+A sample Souffle client program can be found under directory dlexample.  
