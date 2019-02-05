@@ -40,7 +40,7 @@ BOOST_AUTO_TEST_CASE(test_exp) {
 	// no clue if the latter is correct, but at least it has the right number of digits
 }
 
-// unit tests from EIP
+// unit tests from EIP-145
 BOOST_AUTO_TEST_CASE(test_shl) {
 	BOOST_TEST(
 			   shl_256("0x0",
@@ -52,6 +52,193 @@ BOOST_AUTO_TEST_CASE(test_shl) {
 					   "0x0000000000000000000000000000000000000000000000000000000000000001")
 			   ==
 			   "0x2");
+	BOOST_TEST(
+			   shl_256("0xff",
+					   "0x0000000000000000000000000000000000000000000000000000000000000001")
+			   ==
+			   "0x8000000000000000000000000000000000000000000000000000000000000000");
+	BOOST_TEST(
+			   shl_256("0x100",
+					   "0x0000000000000000000000000000000000000000000000000000000000000001")
+			   ==
+			   "0x0");
+	BOOST_TEST(
+			   shl_256("0x101",
+					   "0x0000000000000000000000000000000000000000000000000000000000000001")
+			   ==
+			   "0x0");
+	BOOST_TEST(
+			   shl_256("0x00",
+					   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			   ==
+			   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+	BOOST_TEST(
+			   shl_256("0x01",
+					   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			   ==
+			   "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe");
+	BOOST_TEST(
+			   shl_256("0xff",
+					   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			   ==
+			   "0x8000000000000000000000000000000000000000000000000000000000000000");
+	BOOST_TEST(
+			   shl_256("0x100",
+					   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			   ==
+			   "0x0");
+	BOOST_TEST(
+			   shl_256("0x01",
+					   "0x0000000000000000000000000000000000000000000000000000000000000000")
+			   ==
+			   "0x0");
+	BOOST_TEST(
+			   shl_256("0x01",
+					   "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			   ==
+			   "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe");
 }
 
+BOOST_AUTO_TEST_CASE(test_shr) {
+	BOOST_TEST(
+			   shr_256("0x0",
+					   "0x0000000000000000000000000000000000000000000000000000000000000001")
+			   ==
+			   "0x1");
+	BOOST_TEST(
+			   shr_256("0x1",
+					   "0x0000000000000000000000000000000000000000000000000000000000000001")
+			   ==
+			   "0x0");
+	BOOST_TEST(
+			   shr_256("0x01",
+					   "0x8000000000000000000000000000000000000000000000000000000000000000")
+			   ==
+			   "0x4000000000000000000000000000000000000000000000000000000000000000");
+	BOOST_TEST(
+			   shr_256("0xff",
+					   "0x8000000000000000000000000000000000000000000000000000000000000000")
+			   ==
+			   "0x1");
+	BOOST_TEST(
+			   shr_256("0x100",
+					   "0x8000000000000000000000000000000000000000000000000000000000000000")
+			   ==
+			   "0x0");
+	BOOST_TEST(
+			   shr_256("0x0101",
+					   "0x8000000000000000000000000000000000000000000000000000000000000000")
+			   ==
+			   "0x0");
+	BOOST_TEST(
+			   shr_256("0x00",
+					   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			   ==
+			   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+	BOOST_TEST(
+			   shr_256("0x01",
+					   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			   ==
+			   "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+	BOOST_TEST(
+			   shr_256("0xff",
+					   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			   ==
+			   "0x1");
+	BOOST_TEST(
+			   shr_256("0x0100",
+					   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			   ==
+			   "0x0");
+	BOOST_TEST(
+			   shr_256("0x01",
+					   "0x0000000000000000000000000000000000000000000000000000000000000000")
+			   ==
+			   "0x0");
+	
+}
+
+BOOST_AUTO_TEST_CASE(test_sar) {
+	BOOST_TEST(
+			   sar_256("0x0",
+					   "0x0000000000000000000000000000000000000000000000000000000000000001")
+			   ==
+			   "0x1");
+	BOOST_TEST(
+			   sar_256("0x01",
+					   "0x0000000000000000000000000000000000000000000000000000000000000001")
+			   ==
+			   "0x0");
+	BOOST_TEST(
+			   sar_256("0x01",
+					   "0x8000000000000000000000000000000000000000000000000000000000000000")
+			   ==
+			   "0xc000000000000000000000000000000000000000000000000000000000000000");
+	BOOST_TEST(
+			   sar_256("0xff",
+					   "0x8000000000000000000000000000000000000000000000000000000000000000")
+			   ==
+			   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+	BOOST_TEST(
+			   sar_256("0x100",
+					   "0x8000000000000000000000000000000000000000000000000000000000000000")
+			   ==
+			   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+	BOOST_TEST(
+			   sar_256("0x0101",
+					   "0x8000000000000000000000000000000000000000000000000000000000000000")
+			   ==
+			   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+	BOOST_TEST(
+			   sar_256("0x00",
+					   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			   ==
+			   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+	BOOST_TEST(
+			   sar_256("0x01",
+					   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			   ==
+			   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+	BOOST_TEST(
+			   sar_256("0xff",
+					   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			   ==
+			   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+	BOOST_TEST(
+			   sar_256("0x0100",
+					   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			   ==
+			   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+	BOOST_TEST(
+			   sar_256("0x01",
+					   "0x0000000000000000000000000000000000000000000000000000000000000000")
+			   ==
+			   "0x0");
+	BOOST_TEST(
+			   sar_256("0xfe",
+					   "0x4000000000000000000000000000000000000000000000000000000000000000")
+			   ==
+			   "0x1");
+	BOOST_TEST(
+			   sar_256("0xf8",
+					   "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			   ==
+			   "0x7f");
+	BOOST_TEST(
+			   sar_256("0xfe",
+					   "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			   ==
+			   "0x1");
+	BOOST_TEST(
+			   sar_256("0xff",
+					   "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			   ==
+			   "0x0");
+	BOOST_TEST(
+			   sar_256("0x0100",
+					   "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			   ==
+			   "0x0");
+
+}
 
