@@ -1,0 +1,22 @@
+// Functor declarations for use in Datalog code
+
+.functor add_256(symbol,symbol):symbol
+.functor sub_256(symbol,symbol):symbol
+.functor mul_256(symbol,symbol):symbol
+.functor div_256(symbol,symbol):symbol
+.functor mod_256(symbol,symbol):symbol
+.functor and_256(symbol,symbol):symbol
+.functor or_256(symbol,symbol):symbol
+.functor xor_256(symbol,symbol):symbol
+.functor gt_256(symbol,symbol):symbol
+.functor eq_256(symbol,symbol):symbol
+.functor lt_256(symbol,symbol):symbol
+.functor exp_256(symbol,symbol):symbol
+.functor smod_256(symbol,symbol):symbol
+.functor sdiv_256(symbol,symbol):symbol
+.functor sgt_256(symbol,symbol):symbol
+.functor slt_256(symbol,symbol):symbol
+.functor shl_256(symbol,symbol):symbol
+.functor shr_256(symbol,symbol):symbol
+.functor sar_256(symbol,symbol):symbol
+

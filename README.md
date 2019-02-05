@@ -7,3 +7,13 @@ Current coverage:
 Dependencies:
  - Souffle: https://github.com/souffle-lang/souffle
  - Boost libraries
+
+Usage:
+ $ make  # builds all, creates libfunctors.so as a link to libsoufflenum.so
+ $ export LD_LIBRARY_PATH=`pwd`  # or wherever you want to put the resulting libfunctors.so
+
+and use a Souffle program with the num256functors.dl definitions.
+
+A sample Souffle client program can be found under directory
+dlexample.  For compiled execution, libfunctors.so (i.e., at least a
+link to the functors .so) should be in the compilation directory.
