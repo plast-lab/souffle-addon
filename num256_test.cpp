@@ -242,3 +242,14 @@ BOOST_AUTO_TEST_CASE(test_sar) {
 
 }
 
+BOOST_AUTO_TEST_CASE(test_not) {
+	BOOST_TEST(
+			   not_256("0xffffffffffffffffffffffffffffffffffffffff")
+			   ==
+			   "0xffffffffffffffffffffffff0000000000000000000000000000000000000000");
+
+	BOOST_TEST(
+			   not_256("0x0")
+			   ==
+			   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+}

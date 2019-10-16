@@ -19,4 +19,4 @@
 .functor shl_256(symbol,symbol):symbol
 .functor shr_256(symbol,symbol):symbol
 .functor sar_256(symbol,symbol):symbol
-
+.functor not_256(symbol):symbol
