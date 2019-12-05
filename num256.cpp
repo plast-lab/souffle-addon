@@ -264,6 +264,15 @@ extern "C" {
 		return out;
 	}
 	
+	const char* not_256(const char *x) {
+		thread_local static char out[STRING_LEN] = {"0x"};
+		uint256_t my_x(x);
+		uint256_t result = ~my_x;
+		std::string str_result = result.str(32, std::ios_base::hex);
+		std::transform(str_result.begin(), str_result.end(), str_result.begin(), ::tolower);
+		strcpy(out+2, str_result.c_str());
+		return out;
+	}
 }
 
 
