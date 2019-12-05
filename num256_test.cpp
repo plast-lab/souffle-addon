@@ -99,6 +99,17 @@ BOOST_AUTO_TEST_CASE(test_shl) {
 			   "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe");
 }
 
+BOOST_AUTO_TEST_CASE(test_conv) {
+	BOOST_TEST(
+                   number_to_hex(uint32_t(0xFFFF))
+                   ==
+                   "0xffff");
+	BOOST_TEST(
+                   hex_to_number("0xeff23")
+                   ==
+                   0xeff23);
+}
+
 BOOST_AUTO_TEST_CASE(test_shr) {
 	BOOST_TEST(
 			   shr_256("0x0",

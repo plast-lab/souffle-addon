@@ -16,7 +16,20 @@ extern "C" {
 // - no leading zeros (i.e., "0xff", not "0x000ff")
 
 	// REVIEW: Lots of repetition, factor out in the future
-	
+
+        const char* number_to_hex(int32_t x) {
+		thread_local static char out[STRING_LEN] = {"0x"};
+                uint256_t result(x);
+		std::string str_result = result.str(32, std::ios_base::hex);
+		std::transform(str_result.begin(), str_result.end(), str_result.begin(), ::tolower);
+		strcpy(out+2, str_result.c_str());
+		return out;
+        }  
+  
+        int32_t hex_to_number(const char *x) {
+            return (int32_t) uint256_t(x).template convert_to<int>();
+        }
+  
 	const char* add_256(const char *x, const char *y) {
 		thread_local static char out[STRING_LEN] = {"0x"}; 
 		uint256_t my_x(x);

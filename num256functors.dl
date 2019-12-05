@@ -19,4 +19,6 @@
 .functor shl_256(symbol,symbol):symbol
 .functor shr_256(symbol,symbol):symbol
 .functor sar_256(symbol,symbol):symbol
+.functor hex_to_number(symbol):number
+.functor number_to_hex(number):symbol
 
