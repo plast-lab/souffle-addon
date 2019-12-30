@@ -264,3 +264,28 @@ BOOST_AUTO_TEST_CASE(test_not) {
 			   ==
 			   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 }
+
+BOOST_AUTO_TEST_CASE(test_add_set) {
+	BOOST_TEST(
+                   add_set("boo|zoo", "too")
+                   ==
+                   "boo|too|zoo");
+
+	BOOST_TEST(
+                   add_set("", "")
+                   ==
+                   "");
+}
+
+
+BOOST_AUTO_TEST_CASE(test_in_set) {
+	BOOST_TEST(
+                   in_set("boo|zoo", "too")
+                   ==
+                   0);
+
+	BOOST_TEST(
+                   in_set("boo|zoo", "boo")
+                   ==
+                   1);
+}
