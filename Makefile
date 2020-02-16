@@ -1,10 +1,14 @@
 # rudimentary
-all:	libsoufflenum.so tests
+all:	libsoufflenum.so num_tests mappings_tests
 
-libsoufflenum.so: 	num256.cpp
-	g++ -std=c++17 -O3 -shared -o libsoufflenum.so -fPIC num256.cpp
+libsoufflenum.so: 	num256.cpp mappings.cpp
+	g++ -std=c++17 -O3 -shared -o libsoufflenum.so -fPIC num256.cpp mappings.cpp
 	ln -sf libsoufflenum.so libfunctors.so 
 
-tests:	num256.cpp num256_test.cpp
-	g++ -std=c++17 -o tests num256_test.cpp
-	./tests
+num_tests:	num256.cpp num256_test.cpp 
+	g++ -std=c++17 -o num_tests num256_test.cpp
+	./num_tests
+
+mappings_tests:	mappings.cpp mappings_test.cpp
+	g++ -std=c++17 -o mappings_tests mappings_test.cpp
+	./mappings_tests
