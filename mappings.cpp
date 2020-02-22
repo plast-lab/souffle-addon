@@ -76,7 +76,7 @@ struct MappingsCol {
     }
 
     struct Hash {
-        size_t operator()(const MappingsCol& mappings) const {
+        size_t operator()(const MappingsCol& mappings) const {            
             return size_t(mappings.hash);
         }
     };
@@ -96,6 +96,20 @@ extern "C" {
     // REVIEW: is the number type big enough for all future uses?
     static unordered_map<MappingsCol, int32_t, MappingsCol::Hash> all_mappings;
 
+    // creates (if not existent) an empty mapping and returns its sequential index
+    int32_t empty_mapping() {
+        MappingsCol m(0,nullptr);
+        auto got = all_mappings.find(m);
+        if (got != all_mappings.end()) {
+            return got->second;
+        }
+        // it's a new one, need to add it to both structures
+        int32_t col_id = INDEX_TO_COLID(mappings_seq.size());
+        mappings_seq.push_back(m);
+        all_mappings[m] = col_id;
+        return col_id;
+    }
+    
     // creates (if not existent) a singleton mapping and returns its
     // sequential index
     int32_t singleton_mapping(const char* key, const char* val_id, const char* val_text) {
@@ -118,6 +132,9 @@ extern "C" {
     // mapping for a key, but with different value) zero is returned.
     // If the resulting collection exists, the existing entry is returned.
     int32_t combine_strict(int32_t map1_id, int32_t map2_id) {
+        if (map1_id == 0 || map2_id == 0)
+            return 0;
+        
         MappingsCol& m1 = mappings_seq.at(COLID_TO_INDEX(map1_id));
         MappingsCol& m2 = mappings_seq.at(COLID_TO_INDEX(map2_id));  // both have to exist
 
@@ -195,6 +212,9 @@ extern "C" {
     // mapping for a key, but with different value) both mappings are kept!
     // If the resulting collection exists, the existing entry is returned.
     int32_t combine_loose(int32_t map1_id, int32_t map2_id) {
+        if (map1_id == 0 || map2_id == 0)
+            return 0;
+        
         MappingsCol& m1 = mappings_seq.at(COLID_TO_INDEX(map1_id));
         MappingsCol& m2 = mappings_seq.at(COLID_TO_INDEX(map2_id));  // both have to exist
 
@@ -279,11 +299,13 @@ extern "C" {
         MappingsCol& m1 = mappings_seq.at(COLID_TO_INDEX(map_id));
         string accum = "[";
         for (int i = 0; i < m1.size; i++) {
-            accum += "[";
-            accum += m1.contents[i].key;
-            accum += " -> ";
-            accum += m1.contents[i].val_text;
-            accum += "]";
+            //            if (strcmp(m1.contents[i].key, "") != 0) {  // don't print mappings with empty keys
+                accum += "[";
+                accum += m1.contents[i].key;
+                accum += " -> ";
+                accum += m1.contents[i].val_text;
+                accum += "]";
+                //            }
         }
         accum += "]";
         char* out = new char[accum.length() + 1];

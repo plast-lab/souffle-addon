@@ -12,6 +12,14 @@ BOOST_AUTO_TEST_CASE(test_simplenodup) {
                singleton_mapping("x", "3", "three"));
 }
 
+BOOST_AUTO_TEST_CASE(test_emptynodup) {
+	BOOST_TEST(
+               empty_mapping()
+			   ==
+               empty_mapping()
+               );
+}
+
 BOOST_AUTO_TEST_CASE(test_complexnodup1) {
 	BOOST_TEST(
                combine_strict(
@@ -61,6 +69,24 @@ BOOST_AUTO_TEST_CASE(test_simpleconflict) {
                               singleton_mapping("x", "4", "four"))
 			   ==
                0);
+}
+
+BOOST_AUTO_TEST_CASE(test_zeros_tolerated) {
+	BOOST_TEST(
+               combine_strict(combine_strict(singleton_mapping("x", "3", "three"),
+                                             singleton_mapping("x", "4", "four")),
+                              singleton_mapping("y", "8", "eight"))
+			   ==
+               0);
+}
+
+BOOST_AUTO_TEST_CASE(test_empty_works_simple) {
+	BOOST_TEST(
+               combine_strict(combine_strict(singleton_mapping("x", "3", "three"),
+                                             empty_mapping()),
+                              empty_mapping())
+			   ==
+               singleton_mapping("x", "3", "three"));
 }
 
 BOOST_AUTO_TEST_CASE(test_complexnoconflict1) {
