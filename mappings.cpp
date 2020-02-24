@@ -7,6 +7,7 @@
 #include <vector>
 #include <unordered_map>
 #include <iostream>
+#include <mutex>
 using namespace std;
 
 // Quick, rusty C++, Java-like naming
@@ -96,8 +97,11 @@ extern "C" {
     // REVIEW: is the number type big enough for all future uses?
     static unordered_map<MappingsCol, int32_t, MappingsCol::Hash> all_mappings;
 
+    static std::mutex mappings_lock;
+
     // creates (if not existent) an empty mapping and returns its sequential index
     int32_t empty_mapping() {
+        std::lock_guard<std::mutex> lock(mappings_lock);
         MappingsCol m(0,nullptr);
         auto got = all_mappings.find(m);
         if (got != all_mappings.end()) {
@@ -113,6 +117,7 @@ extern "C" {
     // creates (if not existent) a singleton mapping and returns its
     // sequential index
     int32_t singleton_mapping(const char* key, const char* val_id, const char* val_text) {
+        std::lock_guard<std::mutex> lock(mappings_lock);
         MappingNode *mn = new MappingNode(key, val_id, val_text);
         MappingsCol m(1,mn);
         auto got = all_mappings.find(m);
@@ -135,6 +140,7 @@ extern "C" {
         if (map1_id == 0 || map2_id == 0)
             return 0;
         
+        std::lock_guard<std::mutex> lock(mappings_lock);
         MappingsCol& m1 = mappings_seq.at(COLID_TO_INDEX(map1_id));
         MappingsCol& m2 = mappings_seq.at(COLID_TO_INDEX(map2_id));  // both have to exist
 
@@ -215,6 +221,7 @@ extern "C" {
         if (map1_id == 0 || map2_id == 0)
             return 0;
         
+        std::lock_guard<std::mutex> lock(mappings_lock);
         MappingsCol& m1 = mappings_seq.at(COLID_TO_INDEX(map1_id));
         MappingsCol& m2 = mappings_seq.at(COLID_TO_INDEX(map2_id));  // both have to exist
 
