@@ -172,10 +172,11 @@ BOOST_AUTO_TEST_CASE(test_simpleloose2) {
                combine_loose(
                               singleton_mapping("x", "3", "three"),
                               singleton_mapping("x", "4", "four"))
-               !=
-               singleton_mapping("x", "3", "three")
+               ==
+               empty_mapping()
                );
 }
+
 
 BOOST_AUTO_TEST_CASE(test_complexloose) {
 	BOOST_TEST(
@@ -192,7 +193,7 @@ BOOST_AUTO_TEST_CASE(test_complexloose) {
                                                                            singleton_mapping("x", "2", ""))))
                                ).size
                ==
-               6
+               4
                );
 }
 
@@ -218,7 +219,7 @@ BOOST_AUTO_TEST_CASE(test_to_string) {
                                                                             ),
                                                              singleton_mapping("x", "2", "two"))))
                ==
-               "[[a -> eight][b -> eighty-seven][f -> one][x -> two][x -> three][y -> eight]]"
+               "[[a -> eight][b -> eighty-seven][f -> one][y -> eight]]"
                );
 }
 

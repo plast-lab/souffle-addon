@@ -209,7 +209,7 @@ extern "C" {
     
     // Combine two mappings-collections to create a new one. If the
     // two collections disagree at any element (i.e., both contain a
-    // mapping for a key, but with different value) both mappings are kept!
+    // mapping for a key, but with different value) both mappings are removed!
     // If the resulting collection exists, the existing entry is returned.
     int32_t combine_loose(int32_t map1_id, int32_t map2_id) {
         if (map1_id == 0 || map2_id == 0)
@@ -225,11 +225,11 @@ extern "C" {
             while (index1 < m1.size && index2 < m2.size) {
                 int comp = strcmp(m1.contents[index1].key, m2.contents[index2].key);
                 if (comp == 0) {
-                    if (m1.contents[index1].val_id != m2.contents[index2].val_id) {
-                        new_size++;  // mappings don't agree on same key, keep both
-                    }
+                    bool remove = m1.contents[index1].val_id != m2.contents[index2].val_id;
+                      // mappings don't agree on same key, will remove both
                     index1++;
                     index2++;
+                    if (remove) continue;
                 } else if (comp < 0) {
                     index1++;
                 } else {
@@ -253,18 +253,15 @@ extern "C" {
             while (index1 < m1.size && index2 < m2.size) {
                 int comp_key = strcmp(m1.contents[index1].key, m2.contents[index2].key);
                 if (comp_key == 0) {
-                    int comp_val = strcmp(m1.contents[index1].val_id, m2.contents[index2].val_id);
-                    if (comp_val == 0) {
-                        new_contents[index] = m1.contents[index1];
-                        index1++;
-                        index2++;
-                    } else if (comp_val < 0) {
-                        new_contents[index] = m1.contents[index1];
-                        index1++;
-                    } else {
-                        new_contents[index] = m2.contents[index2];
-                        index2++;
-                    }
+                    const MappingNode& possibleContents = m1.contents[index1];
+                    int comp_val = strcmp(possibleContents.val_id, m2.contents[index2].val_id);
+                    index1++;
+                    index2++;                    
+                    if (comp_val != 0)
+                        continue;  // skip copying
+                    else {
+                        new_contents[index] = possibleContents;
+                    }                     
                 } else if (comp_key < 0) {
                     new_contents[index] = m1.contents[index1];
                     index1++;
