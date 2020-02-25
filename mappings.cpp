@@ -6,6 +6,7 @@
 #include <string.h>
 #include <vector>
 #include <unordered_map>
+#include <map>
 #include <iostream>
 #include <mutex>
 using namespace std;
@@ -97,6 +98,8 @@ extern "C" {
     // REVIEW: is the number type big enough for all future uses?
     static unordered_map<MappingsCol, int32_t, MappingsCol::Hash> all_mappings;
 
+    static std::map<pair<int32_t,int32_t>, int32_t> combine_strict_cache;
+    
     static std::mutex mappings_lock;
 
     // creates (if not existent) an empty mapping and returns its sequential index
@@ -139,8 +142,16 @@ extern "C" {
     int32_t combine_strict(int32_t map1_id, int32_t map2_id) {
         if (map1_id == 0 || map2_id == 0)
             return 0;
-        
+
+        std::pair<int32_t,int32_t> inputs(map1_id, map2_id);
+
         std::lock_guard<std::mutex> lock(mappings_lock);
+        
+        auto in_cache = combine_strict_cache.find(inputs);
+        if (in_cache != combine_strict_cache.end()) {
+            return in_cache->second;
+        }   
+        
         MappingsCol& m1 = mappings_seq.at(COLID_TO_INDEX(map1_id));
         MappingsCol& m2 = mappings_seq.at(COLID_TO_INDEX(map2_id));  // both have to exist
 
@@ -151,8 +162,10 @@ extern "C" {
             while (index1 < m1.size && index2 < m2.size) {
                 int comp = strcmp(m1.contents[index1].key, m2.contents[index2].key);
                 if (comp == 0) {
-                    if (m1.contents[index1].val_id != m2.contents[index2].val_id)
+                    if (m1.contents[index1].val_id != m2.contents[index2].val_id) {
+                        combine_strict_cache[inputs] = 0;  // cache the result, even invalid
                         return 0;  // mappings don't agree on same key!
+                    }
                     else {
                         index1++;
                         index2++;
@@ -203,12 +216,14 @@ extern "C" {
         auto got = all_mappings.find(new_map);
         if (got != all_mappings.end()) {
             delete new_contents;
+            combine_strict_cache[inputs] = got->second;
             return got->second;
         }
         // it's a new one, need to add it to both structures
         int32_t new_map_id = INDEX_TO_COLID(mappings_seq.size());
         mappings_seq.push_back(new_map);
         all_mappings[new_map] = new_map_id;
+        combine_strict_cache[inputs] = new_map_id;
         return new_map_id;
     }
 
