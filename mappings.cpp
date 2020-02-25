@@ -84,6 +84,12 @@ struct MappingsCol {
     };
 };
 
+struct PairHash {
+    size_t operator()(const pair<int32_t,int32_t>& p) const {            
+        return p.first * p.second;
+    }
+};
+
 #define COLID_TO_INDEX(i) (i-1)
 #define INDEX_TO_COLID(i) (i+1)
 // index cannot be zero (special value), so we use one-plus
@@ -97,8 +103,6 @@ extern "C" {
 
     // REVIEW: is the number type big enough for all future uses?
     static unordered_map<MappingsCol, int32_t, MappingsCol::Hash> all_mappings;
-
-    static std::map<pair<int32_t,int32_t>, int32_t> combine_strict_cache;
     
     static std::mutex mappings_lock;
 
@@ -140,13 +144,16 @@ extern "C" {
     // mapping for a key, but with different value) zero is returned.
     // If the resulting collection exists, the existing entry is returned.
     int32_t combine_strict(int32_t map1_id, int32_t map2_id) {
+        static unordered_map<pair<int32_t,int32_t>, int32_t, PairHash> combine_strict_cache;
+
         if (map1_id == 0 || map2_id == 0)
             return 0;
 
         std::pair<int32_t,int32_t> inputs(map1_id, map2_id);
 
         std::lock_guard<std::mutex> lock(mappings_lock);
-        
+        // the mutex is enough to protect all structures
+                
         auto in_cache = combine_strict_cache.find(inputs);
         if (in_cache != combine_strict_cache.end()) {
             return in_cache->second;
@@ -233,10 +240,20 @@ extern "C" {
     // mapping for a key, but with different value) both mappings are removed!
     // If the resulting collection exists, the existing entry is returned.
     int32_t combine_loose(int32_t map1_id, int32_t map2_id) {
+        static unordered_map<pair<int32_t,int32_t>, int32_t, PairHash> combine_loose_cache;
+
         if (map1_id == 0 || map2_id == 0)
             return 0;
-        
+
+        std::pair<int32_t,int32_t> inputs(map1_id, map2_id);
+
         std::lock_guard<std::mutex> lock(mappings_lock);
+
+        auto in_cache = combine_loose_cache.find(inputs);
+        if (in_cache != combine_loose_cache.end()) {
+            return in_cache->second;
+        }   
+        
         MappingsCol& m1 = mappings_seq.at(COLID_TO_INDEX(map1_id));
         MappingsCol& m2 = mappings_seq.at(COLID_TO_INDEX(map2_id));  // both have to exist
 
@@ -303,12 +320,14 @@ extern "C" {
         auto got = all_mappings.find(new_map);
         if (got != all_mappings.end()) {
             delete new_contents;
+            combine_loose_cache[inputs] = got->second;
             return got->second;
         }
         // it's a new one, need to add it to both structures
         int32_t new_map_id = INDEX_TO_COLID(mappings_seq.size());
         mappings_seq.push_back(new_map);
         all_mappings[new_map] = new_map_id;
+        combine_loose_cache[inputs] = new_map_id;
         return new_map_id;
     }
     
@@ -318,13 +337,11 @@ extern "C" {
         MappingsCol& m1 = mappings_seq.at(COLID_TO_INDEX(map_id));
         string accum = "[";
         for (int i = 0; i < m1.size; i++) {
-            //            if (strcmp(m1.contents[i].key, "") != 0) {  // don't print mappings with empty keys
-                accum += "[";
-                accum += m1.contents[i].key;
-                accum += " -> ";
-                accum += m1.contents[i].val_text;
-                accum += "]";
-                //            }
+            accum += "[";
+            accum += m1.contents[i].key;
+            accum += " -> ";
+            accum += m1.contents[i].val_text;
+            accum += "]";
         }
         accum += "]";
         char* out = new char[accum.length() + 1];
