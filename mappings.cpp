@@ -28,12 +28,13 @@ struct MappingNode {
     MappingNode(const char* _key, const char* _val_id, const char* _val_text) :
         key(_key), val_id(_val_id), val_text(_val_text)
     {
-        hash = 0;
+        unsigned int temp_hash = 0;
         // rudimentary hash
         for (const char* i = key; *i != '\0'; i++)
-            hash += *i;
+            temp_hash += *i;
         for (const char* i = val_id; *i != '\0'; i++)
-            hash += *i;
+            temp_hash += *i;
+        hash = temp_hash;
     }
 
     bool operator==(const MappingNode& rhs) const {
@@ -60,10 +61,11 @@ struct MappingsCol {
     unsigned int hash;
 
     MappingsCol(const int _size, const MappingNode *_contents) : size(_size), contents(_contents) {
-        hash = 0;
+        unsigned int temp_hash = 0;
         for (int i = 0; i < size; i++) {
-            hash += contents[i].hash;
+            temp_hash += contents[i].hash;
         }
+        hash = temp_hash;
     }
 
     bool operator==(const MappingsCol& rhs) const {
@@ -146,9 +148,16 @@ extern "C" {
     int32_t combine_strict(int32_t map1_id, int32_t map2_id) {
         static unordered_map<pair<int32_t,int32_t>, int32_t, PairHash> combine_strict_cache;
 
+        if (map1_id == map2_id)
+            return map1_id;
         if (map1_id == 0 || map2_id == 0)
             return 0;
-
+        if (map1_id > map2_id) { // swap
+            int32_t temp = map1_id;
+            map1_id = map2_id;
+            map2_id = temp;
+        }
+           
         std::pair<int32_t,int32_t> inputs(map1_id, map2_id);
 
         std::lock_guard<std::mutex> lock(mappings_lock);
@@ -242,8 +251,15 @@ extern "C" {
     int32_t combine_loose(int32_t map1_id, int32_t map2_id) {
         static unordered_map<pair<int32_t,int32_t>, int32_t, PairHash> combine_loose_cache;
 
+        if (map1_id == map2_id)
+            return map1_id;
         if (map1_id == 0 || map2_id == 0)
             return 0;
+        if (map1_id > map2_id) { // swap
+            int32_t temp = map1_id;
+            map1_id = map2_id;
+            map2_id = temp;
+        }
 
         std::pair<int32_t,int32_t> inputs(map1_id, map2_id);
 
