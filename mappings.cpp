@@ -31,9 +31,9 @@ struct MappingNode {
         unsigned int temp_hash = 0;
         // rudimentary hash
         for (const char* i = key; *i != '\0'; i++)
-            temp_hash += *i;
+            temp_hash += (long) i;
         for (const char* i = val_id; *i != '\0'; i++)
-            temp_hash += *i;
+            temp_hash += (long) i;
         hash = temp_hash;
     }
 
@@ -62,9 +62,12 @@ struct MappingsCol {
 
     MappingsCol(const int _size, const MappingNode *_contents) : size(_size), contents(_contents) {
         unsigned int temp_hash = 0;
-        for (int i = 0; i < size; i++) {
-            temp_hash += contents[i].hash;
-        }
+        // for (int i = 0; i < size; i++) {
+        //     temp_hash += contents[i].hash;
+        // }
+        if (size > 0) {
+            temp_hash = contents[0].hash + contents[size/2].hash + contents[size/3].hash;
+        } // make hashing constant time
         hash = temp_hash;
     }
 
@@ -146,7 +149,7 @@ extern "C" {
     // mapping for a key, but with different value) zero is returned.
     // If the resulting collection exists, the existing entry is returned.
     int32_t combine_strict(int32_t map1_id, int32_t map2_id) {
-        static unordered_map<pair<int32_t,int32_t>, int32_t, PairHash> combine_strict_cache;
+        //        static unordered_map<pair<int32_t,int32_t>, int32_t, PairHash> combine_strict_cache;
 
         if (map1_id == map2_id)
             return map1_id;
@@ -163,10 +166,10 @@ extern "C" {
         std::lock_guard<std::mutex> lock(mappings_lock);
         // the mutex is enough to protect all structures
                 
-        auto in_cache = combine_strict_cache.find(inputs);
-        if (in_cache != combine_strict_cache.end()) {
-            return in_cache->second;
-        }   
+        // auto in_cache = combine_strict_cache.find(inputs);
+        // if (in_cache != combine_strict_cache.end()) {
+        //     return in_cache->second;
+        // }   
         
         MappingsCol& m1 = mappings_seq.at(COLID_TO_INDEX(map1_id));
         MappingsCol& m2 = mappings_seq.at(COLID_TO_INDEX(map2_id));  // both have to exist
@@ -176,10 +179,11 @@ extern "C" {
         {
             int index1 = 0, index2 = 0;
             while (index1 < m1.size && index2 < m2.size) {
-                int comp = strcmp(m1.contents[index1].key, m2.contents[index2].key);
+                //  int comp = strcmp(m1.contents[index1].key, m2.contents[index2].key);
+                long comp = ((long) m1.contents[index1].key - (long) m2.contents[index2].key);
                 if (comp == 0) {
                     if (m1.contents[index1].val_id != m2.contents[index2].val_id) {
-                        combine_strict_cache[inputs] = 0;  // cache the result, even invalid
+                        //                        combine_strict_cache[inputs] = 0;  // cache the result, even invalid
                         return 0;  // mappings don't agree on same key!
                     }
                     else {
@@ -208,7 +212,8 @@ extern "C" {
             int index1 = 0, index2 = 0;
             int index = 0;
             while (index1 < m1.size && index2 < m2.size) {
-                int comp = strcmp(m1.contents[index1].key, m2.contents[index2].key);
+                //  int comp = strcmp(m1.contents[index1].key, m2.contents[index2].key);
+                long comp = ((long) m1.contents[index1].key - (long) m2.contents[index2].key);
                 if (comp == 0) {
                     new_contents[index] = m1.contents[index1];
                     index1++;
@@ -232,14 +237,14 @@ extern "C" {
         auto got = all_mappings.find(new_map);
         if (got != all_mappings.end()) {
             delete new_contents;
-            combine_strict_cache[inputs] = got->second;
+            //            combine_strict_cache[inputs] = got->second;
             return got->second;
         }
         // it's a new one, need to add it to both structures
         int32_t new_map_id = INDEX_TO_COLID(mappings_seq.size());
         mappings_seq.push_back(new_map);
         all_mappings[new_map] = new_map_id;
-        combine_strict_cache[inputs] = new_map_id;
+        //        combine_strict_cache[inputs] = new_map_id;
         return new_map_id;
     }
 
@@ -249,7 +254,7 @@ extern "C" {
     // mapping for a key, but with different value) both mappings are removed!
     // If the resulting collection exists, the existing entry is returned.
     int32_t combine_loose(int32_t map1_id, int32_t map2_id) {
-        static unordered_map<pair<int32_t,int32_t>, int32_t, PairHash> combine_loose_cache;
+        //        static unordered_map<pair<int32_t,int32_t>, int32_t, PairHash> combine_loose_cache;
 
         if (map1_id == map2_id)
             return map1_id;
@@ -265,10 +270,10 @@ extern "C" {
 
         std::lock_guard<std::mutex> lock(mappings_lock);
 
-        auto in_cache = combine_loose_cache.find(inputs);
-        if (in_cache != combine_loose_cache.end()) {
-            return in_cache->second;
-        }   
+        //        auto in_cache = combine_loose_cache.find(inputs);
+        //        if (in_cache != combine_loose_cache.end()) {
+        //            return in_cache->second;
+        //        }   
         
         MappingsCol& m1 = mappings_seq.at(COLID_TO_INDEX(map1_id));
         MappingsCol& m2 = mappings_seq.at(COLID_TO_INDEX(map2_id));  // both have to exist
@@ -278,7 +283,8 @@ extern "C" {
         {
             int index1 = 0, index2 = 0;
             while (index1 < m1.size && index2 < m2.size) {
-                int comp = strcmp(m1.contents[index1].key, m2.contents[index2].key);
+                //  int comp = strcmp(m1.contents[index1].key, m2.contents[index2].key);
+                long comp = ((long) m1.contents[index1].key - (long) m2.contents[index2].key);
                 if (comp == 0) {
                     bool remove = m1.contents[index1].val_id != m2.contents[index2].val_id;
                       // mappings don't agree on same key, will remove both
@@ -306,10 +312,12 @@ extern "C" {
             int index1 = 0, index2 = 0;
             int index = 0;
             while (index1 < m1.size && index2 < m2.size) {
-                int comp_key = strcmp(m1.contents[index1].key, m2.contents[index2].key);
+                //  int comp_key = strcmp(m1.contents[index1].key, m2.contents[index2].key);
+                long comp_key = ((long) m1.contents[index1].key - (long) m2.contents[index2].key);
                 if (comp_key == 0) {
                     const MappingNode& possibleContents = m1.contents[index1];
-                    int comp_val = strcmp(possibleContents.val_id, m2.contents[index2].val_id);
+                    //  int comp_val = strcmp(possibleContents.val_id, m2.contents[index2].val_id);
+                    long comp_val = ((long) possibleContents.val_id - (long) m2.contents[index2].val_id);
                     index1++;
                     index2++;                    
                     if (comp_val != 0)
@@ -336,14 +344,14 @@ extern "C" {
         auto got = all_mappings.find(new_map);
         if (got != all_mappings.end()) {
             delete new_contents;
-            combine_loose_cache[inputs] = got->second;
+            //            combine_loose_cache[inputs] = got->second;
             return got->second;
         }
         // it's a new one, need to add it to both structures
         int32_t new_map_id = INDEX_TO_COLID(mappings_seq.size());
         mappings_seq.push_back(new_map);
         all_mappings[new_map] = new_map_id;
-        combine_loose_cache[inputs] = new_map_id;
+        //        combine_loose_cache[inputs] = new_map_id;
         return new_map_id;
     }
     

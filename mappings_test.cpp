@@ -219,7 +219,7 @@ BOOST_AUTO_TEST_CASE(test_to_string) {
                                                                             ),
                                                              singleton_mapping("x", "2", "two"))))
                ==
-               "[[a -> eight][b -> eighty-seven][f -> one][y -> eight]]"
+               "[[f -> one][y -> eight][a -> eight][b -> eighty-seven]]" // ordering no longer alphabetic
                );
 }
 
