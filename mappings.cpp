@@ -7,9 +7,12 @@
 #include <vector>
 #include <unordered_map>
 #include <map>
-#include <iostream>
+// #include <iostream>
+// #include <fstream>   // only debugging
 #include <mutex>
 using namespace std;
+
+#define PTR_TO_INT(x) (unsigned int) ((long)(x) % 0xffffffff)
 
 // Quick, rusty C++, Java-like naming
 // Also, I'm lazy and making everything public, so that the functors can
@@ -28,13 +31,14 @@ struct MappingNode {
     MappingNode(const char* _key, const char* _val_id, const char* _val_text) :
         key(_key), val_id(_val_id), val_text(_val_text)
     {
-        unsigned int temp_hash = 0;
-        // rudimentary hash
-        for (const char* i = key; *i != '\0'; i++)
-            temp_hash += (long) i;
-        for (const char* i = val_id; *i != '\0'; i++)
-            temp_hash += (long) i;
-        hash = temp_hash;
+        // unsigned int temp_hash = 0;
+        //// rudimentary hash
+        // for (const char* i = key; *i != '\0'; i++)
+        //     temp_hash += (long) i;
+        // for (const char* i = val_id; *i != '\0'; i++)
+        //     temp_hash += (long) i;
+        // hash = temp_hash;
+        hash = PTR_TO_INT(key) + PTR_TO_INT(val_id);
     }
 
     bool operator==(const MappingNode& rhs) const {
@@ -66,7 +70,7 @@ struct MappingsCol {
         //     temp_hash += contents[i].hash;
         // }
         if (size > 0) {
-            temp_hash = contents[0].hash + contents[size/2].hash + contents[size/3].hash;
+            temp_hash = contents[0].hash + contents[size/2].hash + contents[size/3].hash + contents[size-1].hash;
         } // make hashing constant time
         hash = temp_hash;
     }
@@ -160,7 +164,12 @@ extern "C" {
             map1_id = map2_id;
             map2_id = temp;
         }
-           
+
+        // ofstream myfile;
+        // myfile.open ("combine_log.txt", ios::app);
+        // myfile << map1_id << " " << map2_id << endl;
+        // myfile.close();
+  
         std::pair<int32_t,int32_t> inputs(map1_id, map2_id);
 
         std::lock_guard<std::mutex> lock(mappings_lock);
