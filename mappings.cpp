@@ -66,12 +66,12 @@ struct MappingsCol {
 
     MappingsCol(const int _size, const MappingNode *_contents) : size(_size), contents(_contents) {
         unsigned int temp_hash = 0;
-        // for (int i = 0; i < size; i++) {
-        //     temp_hash += contents[i].hash;
-        // }
-        if (size > 0) {
-            temp_hash = contents[0].hash + contents[size/2].hash + contents[size/3].hash + contents[size-1].hash;
-        } // make hashing constant time
+        for (int i = 0; i < size; i++) {
+            temp_hash += contents[i].hash;
+        }  
+        // if (size > 0) {
+        //     temp_hash = contents[0].hash + contents[size/2].hash + contents[size/3].hash + contents[size-1].hash;
+        // } // make hashing constant time, turned out to be a bad idea!
         hash = temp_hash;
     }
 
@@ -165,9 +165,10 @@ extern "C" {
             map2_id = temp;
         }
 
+        // static unsigned int last_size = 0;
         // ofstream myfile;
         // myfile.open ("combine_log.txt", ios::app);
-        // myfile << map1_id << " " << map2_id << endl;
+        // myfile << map1_id << " " << map2_id << " " << last_size << endl;
         // myfile.close();
   
         std::pair<int32_t,int32_t> inputs(map1_id, map2_id);
@@ -183,6 +184,8 @@ extern "C" {
         MappingsCol& m1 = mappings_seq.at(COLID_TO_INDEX(map1_id));
         MappingsCol& m2 = mappings_seq.at(COLID_TO_INDEX(map2_id));  // both have to exist
 
+        //        last_size = m1.size + m2.size;
+        
         // First traversal: see if they agree, figure out resulting size
         int new_size = 0;
         {
