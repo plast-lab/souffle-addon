@@ -223,3 +223,39 @@ BOOST_AUTO_TEST_CASE(test_to_string) {
                );
 }
 
+BOOST_AUTO_TEST_CASE(test_lookup1) {
+	BOOST_TEST(
+               lookup(combine_loose(
+                                              combine_strict(singleton_mapping("b", "87", "eighty-seven"),
+                                                             combine_strict(
+                                                                            singleton_mapping("x", "3", "three"),
+                                                                            singleton_mapping("y", "8", "eight"))),
+                                              combine_strict(combine_strict(
+                                                                            singleton_mapping("a", "8", "eight"),
+                                                                            singleton_mapping("f", "1", "one")
+                                                                            ),
+                                                             singleton_mapping("x", "2", "two"))),
+                      "f")
+               ==
+               "1" 
+               );
+}
+
+BOOST_AUTO_TEST_CASE(test_lookup2) {
+	BOOST_TEST(
+               lookup(combine_loose(
+                                              combine_strict(singleton_mapping("b", "87", "eighty-seven"),
+                                                             combine_strict(
+                                                                            singleton_mapping("x", "3", "three"),
+                                                                            singleton_mapping("y", "8", "eight"))),
+                                              combine_strict(combine_strict(
+                                                                            singleton_mapping("a", "8", "eight"),
+                                                                            singleton_mapping("f", "1", "one")
+                                                                            ),
+                                                             singleton_mapping("x", "2", "two"))),
+                      "a")
+               ==
+               "8" 
+               );
+}
+

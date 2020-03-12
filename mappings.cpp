@@ -386,6 +386,28 @@ extern "C" {
         return out;
     }
 
+    const char* lookup(int32_t map_id, const char* key) {
+        //        static unordered_map<pair<int32_t,int32_t>, int32_t, PairHash> combine_strict_cache;
+
+        std::lock_guard<std::mutex> lock(mappings_lock);
+        // the mutex is enough to protect all structures
+                
+        MappingsCol& m = mappings_seq.at(COLID_TO_INDEX(map_id));
+
+        int index = 0;
+        while (index < m.size) {
+            //  int comp = strcmp(m1.contents[index1].key, m2.contents[index2].key);
+            const MappingNode& contents = m.contents[index];
+            long comp = ((long)contents.key - (long)key);
+            if (comp == 0)
+                return contents.val_id;
+            if (comp > 0)
+                break;
+            index++;
+        }
+        return nullptr;
+    }
+
 }
     
 
