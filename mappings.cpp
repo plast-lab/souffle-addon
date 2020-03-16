@@ -141,12 +141,12 @@ struct MappingNodes {
        keys(_keys), values(_values) { }
 
      inline MappingNodes* combine_strict(const MappingNodes& m) {
-       printf("keys: %d ; values: %d ; diff1: %d ; diff2: %d \n",
+       /*printf("keys: %d ; values: %d ; diff1: %d ; diff2: %d \n",
               (int) (keys | m.keys).count_bits(),
               (int) (values | m.values).count_bits(),
               (int) (keys ^ values).count_bits(),
               (int) (m.keys ^ m.values).count_bits()
-       );
+              );*/
        int n_intersection_keys = (keys & m.keys).count_bits() / 3 * 3;
        if (n_intersection_keys == 0 ||
            (values & m.values).count_bits() >= n_intersection_keys) {
