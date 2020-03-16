@@ -2,8 +2,10 @@
 
 #define BOOST_TEST_MODULE Mappings Tests
 #include <boost/test/included/unit_test.hpp> 
-
+#include <boost/multiprecision/cpp_int.hpp>
 #include "mappings.cpp"  // shouldn't include .cpps, so ... sue me
+
+using namespace boost::multiprecision;
 
 BOOST_AUTO_TEST_CASE(test_simplenodup) {
 	BOOST_TEST(
@@ -79,6 +81,32 @@ BOOST_AUTO_TEST_CASE(test_zeros_tolerated) {
 			   ==
                0);
 }
+
+BOOST_AUTO_TEST_CASE(test_count_bits) {
+	BOOST_TEST(
+                   uint256::from_uint_64(0x10001000).count_bits()
+			   ==
+               2);
+}
+
+BOOST_AUTO_TEST_CASE(test_hash_simple) {
+	BOOST_TEST(
+                   uint256::from_uint_64(0x10001000).hash()
+			   ==
+               0x10001000);
+}
+
+
+BOOST_AUTO_TEST_CASE(test_hash_complex) {
+	BOOST_TEST(
+                   (uint256::from_onehot(1)   |
+                    uint256::from_onehot(64)  |
+                    uint256::from_onehot(128) |
+                    uint256::from_onehot(130)).hash()
+			   ==
+               0b110);
+}
+
 
 BOOST_AUTO_TEST_CASE(test_empty_works_simple) {
 	BOOST_TEST(
@@ -167,59 +195,5 @@ BOOST_AUTO_TEST_CASE(test_simpleloose) {
                );
 }
 
-BOOST_AUTO_TEST_CASE(test_simpleloose2) {
-	BOOST_TEST(
-               combine_loose(
-                              singleton_mapping("x", "3", "three"),
-                              singleton_mapping("x", "4", "four"))
-               ==
-               empty_mapping()
-               );
-}
 
-
-BOOST_AUTO_TEST_CASE(test_complexloose) {
-	BOOST_TEST(
-               mappings_seq.at(
-                               COLID_TO_INDEX(combine_loose(
-                                                            combine_strict(singleton_mapping("b", "87", "eighty-seven"),
-                                                                           combine_strict(
-                                                                                          singleton_mapping("x", "3", "three"),
-                                                                                          singleton_mapping("y", "8", "eight"))),
-                                                            combine_strict(combine_strict(
-                                                                                          singleton_mapping("a", "8", "eight"),
-                                                                                          singleton_mapping("f", "asd", "asd")
-                                                                                          ),
-                                                                           singleton_mapping("x", "2", ""))))
-                               ).size
-               ==
-               4
-               );
-}
-
-BOOST_AUTO_TEST_CASE(test_to_string1) {
-	BOOST_TEST(
-               mapcol_to_string(
-                                singleton_mapping("a", "8", "eight"))
-               ==
-               "[[a -> eight]]"
-               );
-}
-
-BOOST_AUTO_TEST_CASE(test_to_string) {
-	BOOST_TEST(
-               mapcol_to_string(combine_loose(
-                                              combine_strict(singleton_mapping("b", "87", "eighty-seven"),
-                                                             combine_strict(
-                                                                            singleton_mapping("x", "3", "three"),
-                                                                            singleton_mapping("y", "8", "eight"))),
-                                              combine_strict(combine_strict(
-                                                                            singleton_mapping("a", "8", "eight"),
-                                                                            singleton_mapping("f", "1", "one")
-                                                                            ),
-                                                             singleton_mapping("x", "2", "two"))))
-               ==
-               "[[f -> one][y -> eight][a -> eight][b -> eighty-seven]]" // ordering no longer alphabetic
-               );
-}
 
