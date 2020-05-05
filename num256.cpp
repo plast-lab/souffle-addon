@@ -34,6 +34,14 @@ extern "C" {
     return (int32_t) uint256_t(x).template convert_to<int>();
   }
 
+  int32_t max2(int32_t x, int32_t y) {
+    return x < y ? y : x;
+  }
+
+  int32_t min2(int32_t x, int32_t y) {
+    return x < y ? x : y;
+  }
+  
   set<string> from_chars(const char *x) {
     set<string> strs;
     boost::split(strs,x,boost::is_any_of("|"));

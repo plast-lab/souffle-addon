@@ -2,6 +2,8 @@
 
 .functor hex_to_number(symbol):number
 .functor number_to_hex(number):symbol
+.functor max2(number, number):number
+.functor min2(number, number):number
 
 .functor add_256(symbol,symbol):symbol
 .functor sub_256(symbol,symbol):symbol
