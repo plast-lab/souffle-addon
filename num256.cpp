@@ -42,6 +42,14 @@ extern "C" {
     return x < y ? x : y;
   }
   
+  int32_t cast_to_number(int32_t x) {
+    return x;
+  }
+
+  char* cast_to_symbol(char* x) {
+    return x;
+  }  
+
   set<string> from_chars(const char *x) {
     set<string> strs;
     boost::split(strs,x,boost::is_any_of("|"));
