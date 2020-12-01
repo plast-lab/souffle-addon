@@ -2,7 +2,7 @@
 all:	libsoufflenum.so num_tests mappings_tests
 
 libsoufflenum.so: 	num256.cpp mappings.cpp
-	g++ -std=c++17 -O3 -shared -o libsoufflenum.so -fPIC num256.cpp mappings.cpp -march=native
+	g++ -std=c++17 -O2 -shared -o libsoufflenum.so -fPIC num256.cpp mappings.cpp -march=native
 	ln -sf libsoufflenum.so libfunctors.so 
 
 num_tests:	num256.cpp num256_test.cpp 
