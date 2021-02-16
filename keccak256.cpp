@@ -8,6 +8,10 @@ char num_to_hex(char num) {
     return num < 10 ? num + '0' : (num - 10) + 'a';
 }
 
+char hex_to_num(char hex_char) {
+    return hex_char <= '9' ? hex_char - '0' : (hex_char - 'a') + 10;
+}
+
 extern "C"
 {
   #include "keccak/KeccakHash.h"
@@ -27,5 +31,16 @@ extern "C"
     }
   
     return out_str;
+  }
+
+  const char* hex_to_str(const char* input) {
+    thread_local static char* out = (char*) malloc(sizeof(char) * (strlen(input)/2));
+
+    for (int i = 1; i < strlen(input)/2; i++){
+        out[i - 1] = hex_to_num(input[2*i])*16 + hex_to_num(input[2*i + 1]);
+    }
+    out[strlen(input)/2 - 1] = '\0';
+
+    return out;
   }
 }

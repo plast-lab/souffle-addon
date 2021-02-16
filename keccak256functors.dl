@@ -1,1 +1,2 @@
 .functor keccak_256(symbol):symbol
+.functor hex_to_str(symbol):symbol

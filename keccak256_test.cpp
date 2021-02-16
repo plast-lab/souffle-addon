@@ -26,3 +26,19 @@ BOOST_AUTO_TEST_CASE(test_hash_signature) {
 	    "0xa9059cbb2ab09eb219583f4a59a5d0623ade346d962bcd4e46b11da047c9049b"
     );
 }
+
+BOOST_AUTO_TEST_CASE(test_hex_to_str) {
+	BOOST_TEST(
+        hex_to_str("0x72656365697665417070726f76616c28616464726573732c75696e743235362c616464726573732c627974657329")
+	    ==
+	    "receiveApproval(address,uint256,address,bytes)"
+    );
+}
+
+BOOST_AUTO_TEST_CASE(test_hash_hex_to_str) {
+	BOOST_TEST(
+        keccak_256(hex_to_str("0x7472616e7366657228616464726573732c75696e7432353629"))
+	    ==
+	    "0xa9059cbb2ab09eb219583f4a59a5d0623ade346d962bcd4e46b11da047c9049b"
+    );
+}
