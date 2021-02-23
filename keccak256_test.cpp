@@ -42,3 +42,19 @@ BOOST_AUTO_TEST_CASE(test_hash_hex_to_str) {
 	    "0xa9059cbb2ab09eb219583f4a59a5d0623ade346d962bcd4e46b11da047c9049b"
     );
 }
+
+BOOST_AUTO_TEST_CASE(test_hash_hex_keccak_256_single_byte) {
+	BOOST_TEST(
+        hex_keccak_256("0x61")
+	    ==
+	    "0x3ac225168df54212a25c1c01fd35bebfea408fdac2e31ddd6f80a4bbf9a5f1cb"
+    );
+}
+
+BOOST_AUTO_TEST_CASE(test_hash_hex_keccak_256_two_bytes) {
+	BOOST_TEST(
+        hex_keccak_256("0x6162")
+	    ==
+	    "0xd40d1e79d496f0321bb7c771d11a21a4bd6e998026fe61d0650c7c67bad49c3c"
+    );
+}
