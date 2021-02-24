@@ -43,7 +43,7 @@ extern "C"
     char* input_bytes = (char*) malloc(sizeof(char) * input_byte_len);
 
     for (size_t i = 0; i < input_byte_len; ++i)
-        input_bytes[input_byte_len - 1 - i] = (hex_to_num(input[2 + 2*i]) << 4) + hex_to_num(input[2 + 2*i + 1]);
+        input_bytes[i] = (hex_to_num(input[2 + 2*i]) << 4) + hex_to_num(input[2 + 2*i + 1]);
 
     Keccak_HashInstance hi;
     Keccak_HashInitialize(&hi, 1088, 512, 256, 0x01);

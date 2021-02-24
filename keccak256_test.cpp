@@ -55,6 +55,6 @@ BOOST_AUTO_TEST_CASE(test_hash_hex_keccak_256_two_bytes) {
 	BOOST_TEST(
         hex_keccak_256("0x6162")
 	    ==
-	    "0xd40d1e79d496f0321bb7c771d11a21a4bd6e998026fe61d0650c7c67bad49c3c"
+	    "0x67fad3bfa1e0321bd021ca805ce14876e50acac8ca8532eda8cbf924da565160"
     );
 }
