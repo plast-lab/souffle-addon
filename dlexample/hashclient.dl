@@ -1,0 +1,25 @@
+#include "../hashfunctors.dl"
+
+// Assume we have the following program:
+// 0: x = 100
+// 1: read x
+//
+// We hardcode the instructions and their sequence into the rules below and
+// just focus on the hash functors and their usage.
+
+.decl Step(pc: number, tick: number)
+.decl ValueOfXAtStmtOne(val: symbol)
+.output ValueOfXAtStmtOne
+
+Step(0, t) :-
+  t = @init_state().
+
+Step(1, tPrime) :-
+  Step(0, t),
+  tPrime = @update_state(t, "x", "100").
+
+ValueOfXAtStmtOne(val),
+Step(2, tPrime) :-
+  Step(1, t),
+  val = @get_state(1, "x"),
+  tPrime = @no_update_state(t).

@@ -7,8 +7,8 @@ KECCAK_OBJ := $(patsubst $(KECCAK_DIR)/%.c,$(KECCAK_DIR)/%.o, $(KECCAK_SRC))
 # rudimentary
 all: libsoufflenum.so num_tests mappings_tests keccak256_tests
 
-libsoufflenum.so: $(KECCAK_OBJ) num256.o mappings.o keccak256.o
-	g++ -std=c++17 -shared -o libsoufflenum.so $(KECCAK_OBJ) num256.o mappings.o keccak256.o -march=native
+libsoufflenum.so: $(KECCAK_OBJ) num256.o mappings.o keccak256.o hash.o
+	g++ -std=c++17 -shared -o libsoufflenum.so $(KECCAK_OBJ) num256.o mappings.o keccak256.o hash.o -march=native
 	ln -sf libsoufflenum.so libfunctors.so 
 
 num256.o: num256.cpp
@@ -37,6 +37,9 @@ keccak256_tests: keccak256_test.o $(KECCAK_OBJ)
 
 $(KECCAK_DIR)/%.o: $(KECCAK_DIR)/%.c $(KECCAK_SRC)
 	gcc -O2 -c -fPIC -o $@ $<
+
+hash.o: hash.cpp
+	g++ -std=c++17 -O2 hash.cpp -c -fPIC -o hash.o
 
 softclean:
 	rm -f $(KECCAK_OBJ)

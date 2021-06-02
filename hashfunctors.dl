@@ -1,0 +1,4 @@
+.functor init_state():number
+.functor get_state(number, symbol):symbol
+.functor update_state(number, symbol, symbol):number
+.functor no_update_state(number):number
