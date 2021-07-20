@@ -1,4 +1,4 @@
-#include "../num256functors.dl"   // or wherever you want to put the defs
+#include "../functor_includes.dl"
 
 .decl A(x:symbol)
 .input A

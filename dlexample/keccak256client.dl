@@ -1,4 +1,4 @@
-#include "../keccak256functors.dl"
+#include "../functor_includes.dl"
 
 .decl Hash(a: symbol, b: symbol)
 .output Hash
