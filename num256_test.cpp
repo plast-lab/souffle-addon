@@ -289,3 +289,15 @@ BOOST_AUTO_TEST_CASE(test_in_set) {
                    ==
                    1);
 }
+
+BOOST_AUTO_TEST_CASE(test_len_set) {
+	BOOST_TEST(
+                   len_set("boo|zoo")
+                   ==
+                   2);
+
+	BOOST_TEST(
+                   len_set("")
+                   ==
+                   0);
+}

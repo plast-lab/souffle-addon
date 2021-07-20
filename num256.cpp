@@ -73,6 +73,15 @@ extern "C" {
     return out;
   }
 
+  int32_t len_set(const char *x) {
+    char c = *x;
+    int32_t res = c != 0;
+    do { 
+      res += c == '|';
+    } while ((c = *(x++)) != 0);
+    return res;
+  }  
+
   const char* add_256(const char *x, const char *y) {
     thread_local static char out[STRING_LEN] = {"0x"}; 
     uint256_t my_x(x);
