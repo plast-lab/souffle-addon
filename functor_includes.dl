@@ -39,5 +39,6 @@
 .functor hex_keccak_256(symbol):symbol
 .functor hex_to_str(symbol):symbol
 
+.type StringList = [x: symbol, y: StringList]
 .functor list_concat(a: StringList, b: StringList):StringList stateful
 .functor list_append(a: StringList, elem: symbol):StringList stateful
