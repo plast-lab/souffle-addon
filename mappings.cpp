@@ -7,6 +7,7 @@
 #include <vector>
 #include <unordered_map>
 #include <map>
+#include <string>
 // #include <iostream>
 // #include <fstream>   // only debugging
 #include <mutex>
