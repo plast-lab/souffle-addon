@@ -40,7 +40,7 @@ extern "C" {
             // const std::string& sarg1 = symbolTable->decode(myTuple1[0]);
             // const std::string& sarg2 = symbolTable->decode(myTuple1[1]);
             // cout << sarg1 << "  " << sarg2 << endl;
-            l.push_back(myTuple1[0]);
+            l.push_front(myTuple1[0]);
             if (myTuple1[1] == 0)
                 break;
             myTuple1 = recordTable->unpack(myTuple1[1], 2);
@@ -51,7 +51,7 @@ extern "C" {
         curr = recordTable->pack(myTuple3, 2);
         while (l.size() > 0) {
             souffle::RamDomain myTuple4[2] = {l.front(), curr};
-            // cout << l.front() << " " << l.size() << endl;
+            // cout << l.front() << " "<< symbolTable->decode(l.front()) << " " << l.size() << endl;
             l.pop_front();
             curr = recordTable->pack(myTuple4, 2);
         }
