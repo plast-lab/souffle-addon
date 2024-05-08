@@ -1,0 +1,325 @@
+.type PrimitiveExpr = symbol
+
+.type Operator = symbol
+.type Base = PrimitiveExpr | Operator
+
+// unary, ternary, etc. expressions are represented via binary ones
+.type Expr = [
+                 base: Base,
+                 left: Expr,
+                 right: Expr
+             ]
+
+
+#define XV ["x", nil, nil]
+#define YV ["y", nil, nil]
+#define ZV ["z", nil, nil]
+
+#define CONST ["0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", nil, nil]
+
+.functor smt_response_simple(text: symbol):symbol
+.functor smt_response_with_model(text: symbol): SmtResult stateful
+
+.functor printToSmtStyle(x : Expr, y : BoundVarsArrayType) : symbol stateful
+
+
+
+
+.decl ToSmt(x : Expr, y: SmtResult)
+ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
+    ColumnToArray(y),
+    x = ["FORALLSTAR", YV,["GT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, ZV]]],   /// we lost y variable here !!
+        ["ADD", ["ADD", YV, XV], XV]]].                                        /// debug !
+ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
+    ColumnToArray(y),
+    x = ["SLT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]],
+        ["ADD", ["ADD", YV, XV], XV]].
+ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
+    ColumnToArray(y),
+    x = ["LT", XV,
+        CONST].
+ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
+    ColumnToArray(y),
+    x = ["FORALLSTAR", XV,
+    ["LT", ZV,
+        ["ADD", ["SUB", XV, XV], YV]]
+    ].
+// ToSmt(x, @smt_response_with_model(@printToSmtStyle(x))) :-
+//     x = ["FORALLSTAR", YV, 
+//     ["FORALL", XV,
+//         ["LT", ZV,
+//             ["ADD", ["SUB", XV, XV], YV]]
+//     ]].
+
+ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
+    ColumnToArray(y),
+    x = ["LT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]],
+                ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]]].
+ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
+    ColumnToArray(y),
+    x = ["SLT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]],
+                ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]]].
+ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
+    ColumnToArray(y),
+    x = ["FORALLSTAR",YV,["LT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]],
+                ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]]]].
+ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
+    ColumnToArray(y),
+    x = ["EQ", XV,
+             ["ADD", ["0x0f", nil, nil], ["0x0f", nil, nil]]].
+ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
+    ColumnToArray(y),
+    x = ["EQ", XV,
+             ["ADD", ["0x0f", nil, nil], ["0xf", nil, nil]]].
+ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
+    ColumnToArray(y),
+    x = ["EQ", ["0xf", nil, nil],
+             ["0xffff", nil, nil]].
+    /**
+    TODO: support clasic forall
+        --> handle scope !!
+    */
+.output ToSmt
+
+
+.type SmtResult = [result : symbol,  model : Model ]
+
+.type ModelEntry =[variable : symbol, value : symbol] // changed number->symbol on  value
+                                                      // to support (SMT)-hexadecimals
+.type Model = [entry : ModelEntry, rest : Model]
+
+
+.decl SmtResponseEntry(x: Expr, entry: ModelEntry)
+SmtResponseEntry(x, entry) :-
+  IsSmtModel(x, model),
+  model = [entry, _].
+
+.decl IsSmtModel(x: Expr, model: Model)
+IsSmtModel(x, model) :-
+  ToSmt(x, y),
+  y = ["sat", model].
+
+IsSmtModel(x, model) :-
+  IsSmtModel(x, supermodel),
+  supermodel = [_, model].
+
+.decl getModel(x: Expr, var: symbol, val : symbol)
+getModel(x , var, val) :-
+    ToSmt(x, y),
+    y = ["sat", m],
+    m = [entry, _],
+    entry = [var, val].
+    
+.output getModel
+.output SmtResponseEntry
+
+///////////////////////////////////////////////////////////////////////////////////
+.decl BoundVars(domain: symbol, var : symbol)
+BoundVars("dom", "x x''").
+BoundVars("dom", "y y").
+BoundVars("dom", "z:z").
+BoundVars("dom", "a.a").
+.output BoundVars
+
+.type BoundVarsArrayType = [variable : symbol, rest : BoundVarsArrayType]
+
+// .decl BoundArray(x : BoundVarsArrayType)
+// BoundVarsArray(x) :-
+//     BoundVars(_, x).
+// .output BoundVarsArray
+
+/**
+  Component to perform an anscenting sort of an input set.
+*/
+.comp AbstractAscentingSorter {
+  .decl Input(id:symbol)
+
+  .decl InputToNumber(id:symbol, idNum:number) overridable
+
+  .decl IsLessThan(id1:symbol, id2:symbol)
+  .decl IsLessThanNotNext(id1:symbol, id2:symbol)
+
+  .decl Input_Next(prev:symbol, next:symbol)
+
+  IsLessThan(id1, id2):-
+    InputToNumber(id1, num1),
+    InputToNumber(id2, num2),
+    num1 < num2.
+
+  IsLessThanNotNext(id1, id2):-
+    IsLessThan(id1, id2),
+    IsLessThan(id1, other),
+    IsLessThan(other, id2).
+
+  Input_Next(prev, next):-
+    IsLessThan(prev, next),
+    !IsLessThanNotNext(prev, next).
+}
+
+
+
+/**
+  Sort using souffle's internal ordinal number.
+  Useful when we just want to get any order.
+*/
+.comp OrdAscentingSorter : AbstractAscentingSorter {
+
+  .override InputToNumber
+  InputToNumber(id, ord(id)):-
+    Input(id).
+}
+
+.init cloneOpSorter = OrdAscentingSorter
+
+cloneOpSorter.Input(opID):- BoundVars(_, opID).
+.decl First(opID : symbol)
+.decl Last(opID : symbol)
+First(opID):- BoundVars(_, opID), !cloneOpSorter.Input_Next(_, opID).
+Last(opID) :- BoundVars(_, opID), !cloneOpSorter.Input_Next(opID, _).
+.output First
+.output Last
+
+
+.decl Input_List(id:symbol, list:BoundVarsArrayType)
+Input_List(first, y):-
+    cloneOpSorter.Input(first),
+    y = [first, nil],
+    !cloneOpSorter.Input_Next(_, first).
+
+
+Input_List(next, list):-
+    cloneOpSorter.Input_Next(id, next),
+    Input_List(id, prev_list),
+    list = [next, prev_list].
+
+.decl ColumnToArray(ans : BoundVarsArrayType)
+ColumnToArray(ans) :- 
+    Input_List(last, ans),
+    Last(last).
+.output ColumnToArray
+
+
+// Unit Tests :
+
+.decl TestRun(expr : Expr, res : SmtResult, exp_res : SmtResult)
+TestRun(expr, res, exp_res) :-
+  TestCase(expr, exp_res),
+  ColumnToArray(model),
+  res =  @smt_response_with_model(@printToSmtStyle(expr, model)).
+.output TestRun
+
+
+.decl TestPassed(expr : Expr, res : SmtResult)
+TestPassed(expr, [res, nil]) :-
+  TestRun(expr, [res, _], [res, _]).
+.output TestPassed
+
+.decl TestFailed(expr : Expr, res : SmtResult)
+TestFailed(expr, computed_res) :-
+  TestRun(expr, computed_res, _),
+  !TestPassed(expr, _).
+.output TestFailed
+
+
+.decl TestCase(expr : Expr, exp_res : SmtResult)
+TestCase(["EQ", ["0xf", nil, nil],["0xffff", nil, nil]]
+  , ["unsat", nil]).
+TestCase(["EQ", ["0xffff", nil, nil],["0x00000000ffff", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["ADD", ["0x0000000f", nil, nil],["0xf", nil, nil]] , ["0x01e", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SUB", ["0x0000000f", nil, nil],["0xf", nil, nil]] , ["0x00", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SUB", ["0x00000001e", nil, nil],["0xf", nil, nil]] , ["0x0f", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SUB", ["0x0", nil, nil],["0x1", nil, nil]] , ["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["MUL", ["0x000000010", nil, nil],["0x10", nil, nil]] , ["0x100", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["MUL", ["0x2", nil, nil],["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", nil, nil]] , ["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFe", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["DIV", ["0x10", nil, nil],["0x10", nil, nil]] , ["0x1", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["DIV", ["0x1", nil, nil],["0x2", nil, nil]] , ["0x0", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SDIV", ["0x10", nil, nil],["0x10", nil, nil]] , ["0x1", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SDIV", ["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE", nil, nil],["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", nil, nil]] , ["0x2", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["MOD", ["0xa", nil, nil],["0x3", nil, nil]] , ["0x1", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["MOD", ["0x11", nil, nil],["0x5", nil, nil]] , ["0x2", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SMOD", ["0xa", nil, nil],["0x3", nil, nil]] , ["0x1", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SMOD", ["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8", nil, nil],["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD", nil, nil]] , ["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["GT", ["0xa", nil, nil],["0x9", nil, nil]] , ["0x1", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["GT", ["0xa", nil, nil],["0xa", nil, nil]] , ["0x0", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["LT", ["0x9", nil, nil],["0xa", nil, nil]] , ["0x1", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["LT", ["0xa", nil, nil],["0xa", nil, nil]] , ["0x0", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SGT", ["0x0", nil, nil],["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", nil, nil]] , ["0x1", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SGT", ["0xa", nil, nil],["0xa", nil, nil]] , ["0x0", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SLT", ["0xa", nil, nil],["0xa", nil, nil]] , ["0x0", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SLT", ["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", nil, nil],["0x0", nil, nil]] , ["0x1", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["ISZERO", ["0xa", nil, nil],nil] , ["0x0", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["ISZERO", ["0x0", nil, nil],nil] , ["0x1", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["AND", ["0xa", nil, nil],["0xa", nil, nil]] , ["0x0a", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["AND", ["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", nil, nil],["0x0", nil, nil]] , ["0x0", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["OR", ["0xa", nil, nil],["0xa", nil, nil]] , ["0x0a", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["OR", ["0xFFFF", nil, nil],["0x0", nil, nil]] , ["0xFFFF", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["XOR", ["0xa", nil, nil],["0xa", nil, nil]] , ["0x0", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["XOR", ["0xFFFF", nil, nil],["0x0", nil, nil]] , ["0xFFFF", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["XOR", ["0xf0", nil, nil],["0xf", nil, nil]] , ["0xff", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["XOR", ["0xFFFF", nil, nil],["0xFFFF", nil, nil]] , ["0x0", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SHL", ["0x1", nil, nil],["0x1", nil, nil]] , ["0x2", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SHL", ["0x4", nil, nil],["0xFF00000000000000000000000000000000000000000000000000000000000000", nil, nil]] , ["0xF000000000000000000000000000000000000000000000000000000000000000", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SHR", ["0x1", nil, nil],["0x2", nil, nil]] , ["0x1", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SHR", ["0x4", nil, nil],["0xFF", nil, nil]] , ["0xF", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SAR", ["0x1", nil, nil],["0x2", nil, nil]] , ["0x1", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SAR", ["0x4", nil, nil],["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0", nil, nil]] , ["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["NOT", ["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", nil, nil],nil] , ["0x0", nil, nil]]
+  , ["sat",nil]).
+TestCase(["EQ", ["BYTE", ["0x1f", nil, nil],["0x123456789", nil, nil]] , ["0x89", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["BYTE", ["0x1e", nil, nil],["0xFF00", nil, nil]] , ["0xff", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SIGNEXTEND", ["0x0", nil, nil],["0xff", nil, nil]] , ["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SIGNEXTEND", ["0x0", nil, nil],["0x7f", nil, nil]] , ["0x7F", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["EXP", ["0xa", nil, nil],["0x2", nil, nil]] , ["0x64", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["EXP", ["0x2", nil, nil],["0x2", nil, nil]] , ["0x4", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["SHA3_2ARG", ["0x2", nil, nil],["0x2", nil, nil]] , ["0x4", nil, nil]]
+  , ["unsat", nil]).
+TestCase(["EQ", ["SHA3", ["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", nil, nil],nil] , ["0x0", nil, nil]]
+  , ["unsat",nil]).
+TestCase(["EQ", ["SHA3_1ARG", ["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", nil, nil],nil] , ["0x0", nil, nil]]
+  , ["unsat",nil]).
+
