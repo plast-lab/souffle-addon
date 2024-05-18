@@ -7,6 +7,7 @@ Current coverage:
 Dependencies:
  - Souffle: https://github.com/souffle-lang/souffle
  - Boost libraries
+ - Z3: https://github.com/Z3Prover/z3
 
 Usage:
 
