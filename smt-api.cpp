@@ -20,7 +20,7 @@ using namespace std;
 using namespace z3;
 
 
-#define DEBUG true
+// #define DEBUG true
 
 #ifdef DEBUG
 #define DEBUG_MSG(str) do { std::cout << str << std::endl; } while( false )
