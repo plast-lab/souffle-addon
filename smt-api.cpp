@@ -105,9 +105,10 @@ extern "C"
         // traversing the model
         for (unsigned i = 0; i < m.size(); i++) {
             func_decl v = m[i];
-            // this problem contains only constants
-            assert(v.arity() == 0); 
-            // DEBUG_MSG(v.name() << " = " << m.get_const_interp(v));
+            // skip functions from the model parsing
+            // we only care for the variable-constants of the model
+            if (v.arity() > 0)
+                continue;
             souffle::RamDomain modelEntry[2];
             string trimmed_variable_name = v.name().str();
                             
