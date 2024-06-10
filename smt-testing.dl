@@ -20,59 +20,59 @@
 .functor smt_response_simple(text: symbol):symbol
 .functor smt_response_with_model(text: symbol): SmtResult stateful
 
-.functor printToSmtStyle(x : Expr, y : BoundVarsArrayType) : symbol stateful
+.functor print_to_smt_style(x : Expr, boundVarsList : BoundVarsArrayType) : symbol stateful
 
 
 
 
-.decl ToSmt(x : Expr, y: SmtResult)
-ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
-    ColumnToArray(y),
+.decl ToSmt(x : Expr, result: SmtResult)
+ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
+    ColumnToArray(boundVarsList),
     x = ["FORALLSTAR", YV,["GT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, ZV]]],   /// we lost y variable here !!
         ["ADD", ["ADD", YV, XV], XV]]].                                        /// debug !
-ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
-    ColumnToArray(y),
+ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
+    ColumnToArray(boundVarsList),
     x = ["SLT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]],
         ["ADD", ["ADD", YV, XV], XV]].
-ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
-    ColumnToArray(y),
+ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
+    ColumnToArray(boundVarsList),
     x = ["LT", XV,
         CONST].
-ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
-    ColumnToArray(y),
+ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
+    ColumnToArray(boundVarsList),
     x = ["FORALLSTAR", XV,
     ["LT", ZV,
         ["ADD", ["SUB", XV, XV], YV]]
     ].
-// ToSmt(x, @smt_response_with_model(@printToSmtStyle(x))) :-
-//     x = ["FORALLSTAR", YV, 
+// ToSmt(x, @smt_response_with_model(@print_to_smt_style(x))) :-
+//     x = ["FORALLSTAR", YV,
 //     ["FORALL", XV,
 //         ["LT", ZV,
 //             ["ADD", ["SUB", XV, XV], YV]]
 //     ]].
 
-ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
-    ColumnToArray(y),
+ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
+    ColumnToArray(boundVarsList),
     x = ["LT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]],
                 ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]]].
-ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
-    ColumnToArray(y),
+ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
+    ColumnToArray(boundVarsList),
     x = ["SLT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]],
                 ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]]].
-ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
-    ColumnToArray(y),
+ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
+    ColumnToArray(boundVarsList),
     x = ["FORALLSTAR",YV,["LT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]],
                 ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]]]].
-ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
-    ColumnToArray(y),
+ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
+    ColumnToArray(boundVarsList),
     x = ["EQ", XV,
              ["ADD", ["0x0f", nil, nil], ["0x0f", nil, nil]]].
-ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
-    ColumnToArray(y),
+ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
+    ColumnToArray(boundVarsList),
     x = ["EQ", XV,
              ["ADD", ["0x0f", nil, nil], ["0xf", nil, nil]]].
-ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
-    ColumnToArray(y),
+ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
+    ColumnToArray(boundVarsList),
     x = ["EQ", ["0xf", nil, nil],
              ["0xffff", nil, nil]].
     /**
@@ -84,7 +84,7 @@ ToSmt(x, @smt_response_with_model(@printToSmtStyle(x, y))) :-
 
 .type SmtResult = [result : symbol,  model : Model ]
 
-.type ModelEntry =[variable : symbol, value : symbol] // changed number->symbol on  value
+.type ModelEntry = [variable : symbol, value : symbol] // changed number->symbol on  value
                                                       // to support (SMT)-hexadecimals
 .type Model = [entry : ModelEntry, rest : Model]
 
@@ -109,7 +109,7 @@ getModel(x , var, val) :-
     y = ["sat", m],
     m = [entry, _],
     entry = [var, val].
-    
+
 .output getModel
 .output SmtResponseEntry
 
@@ -193,7 +193,7 @@ Input_List(next, list):-
     list = [next, prev_list].
 
 .decl ColumnToArray(ans : BoundVarsArrayType)
-ColumnToArray(ans) :- 
+ColumnToArray(ans) :-
     Input_List(last, ans),
     Last(last).
 .output ColumnToArray
@@ -205,7 +205,7 @@ ColumnToArray(ans) :-
 TestRun(expr, res, exp_res) :-
   TestCase(expr, exp_res),
   ColumnToArray(model),
-  res =  @smt_response_with_model(@printToSmtStyle(expr, model)).
+  res =  @smt_response_with_model(@print_to_smt_style(expr, model)).
 .output TestRun
 
 
@@ -322,4 +322,113 @@ TestCase(["EQ", ["SHA3", ["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
   , ["unsat",nil]).
 TestCase(["EQ", ["SHA3_1ARG", ["0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", nil, nil],nil] , ["0x0", nil, nil]]
   , ["unsat",nil]).
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////// Computationally heavy exrps ////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// querry
+// ["EQ", ["0x0", nil, nil], exprBeingTested]
+
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["SHR", ["0x60", nil, nil], ["<<msg.sender: owner>>", nil, nil]], ["<<msg.sender: owner>>", nil, nil]]]
+  , ["sat", nil ]).
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["SHR", ["0x60", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["<<msg.sender: owner>>", nil, nil]]]
+  , ["sat", nil ]).
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["SHR", ["0x60", nil, nil], ["<<owner-unique-address>>", nil, nil]], ["<<msg.sender: owner>>", nil, nil]]]
+  , ["sat", nil ]).
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["0xa", nil, nil], ["AND", ["<<owner-unique-value>>", nil, nil], ["0xff", nil, nil]]]]
+  , ["sat", nil ]).
+TestCase(["EQ", ["0x0", nil, nil], ["EQ", ["0x0", nil, nil], ["EQ", ["AND", ["<<owner-unique-value>>", nil, nil], ["0xff", nil, nil]], ["0x3", nil, nil]]]]
+  , ["sat", nil ]).
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["SHR", ["0x60", nil, nil], ["AND", ["0xffffffffffffffffffffffffffffffffffffffff00000000000000000000ffff", nil, nil], ["<<msg.sender: owner>>", nil, nil]]], ["<<msg.sender: owner>>", nil, nil]]]
+  , ["sat", nil ]).
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["SHR", ["0x60", nil, nil], ["AND", ["0xffffffffffffffffffffffffffffffffffffffff00000000000000000000ffff", nil, nil], ["<<owner-unique-value>>", nil, nil]]], ["<<msg.sender: owner>>", nil, nil]]]
+  , ["sat", nil ]).
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["SHR", ["0x60", nil, nil], ["AND", ["0xffffffffffffffffffffffffffffffffffffffff00000000000000000000ffff", nil, nil], ["<<owner-unique-address>>", nil, nil]]], ["<<msg.sender: owner>>", nil, nil]]]
+  , ["sat", nil ]).
+
+
+
+  //// below i replace DIV with SHR to verify that DIV is the computationally heavy operator !
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x0", nil, nil]]]
+  , ["sat", nil ]).
+ TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x0", nil, nil]]]
+  , ["unsat", nil ]). // ast the same *slow* query twice to check how caching works
+ TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x0", nil, nil]]]
+  , ["sat", nil ]). // ast the same *slow* query twice to check how caching works
+ TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x0", nil, nil]]]
+  , ["sat", nil ]). // ast the same *slow* query twice to check how caching works
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x1", nil, nil]]]
+  , ["sat", nil ]).
+
+
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x4", nil, nil]]]
+  , ["unsat", nil]).
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x2", nil, nil]]]
+  , ["unsat", nil]).
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x80", nil, nil]]]
+  , ["unsat", nil]).
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x9", nil, nil]]]
+  , ["unsat", nil]).
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0xd", nil, nil]]]
+  , ["unsat", nil]).
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x343", nil, nil]]]
+  , ["unsat", nil]).
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x1a", nil, nil]]]
+  , ["unsat", nil]).
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x34", nil, nil]]]
+  , ["unsat", nil]).
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x13a", nil, nil]]]
+  , ["unsat", nil]).
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x9d", nil, nil]]]
+  , ["unsat", nil]).
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x1cb", nil, nil]]]
+  ,	["unsat", nil]).
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x275", nil, nil]]]
+  , ["unsat", nil]).
+TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x4ea", nil, nil]]]
+  , ["unsat", nil]).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

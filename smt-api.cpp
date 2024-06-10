@@ -32,114 +32,112 @@ using namespace z3;
 
 extern "C"
 {
-
-    static string def_signextend =
-        "(define-fun signextend ((b (_ BitVec 256)) (x (_ BitVec 256))) (_ BitVec 256)\
-            (let (\
-            (move (bvmul #x0000000000000000000000000000000000000000000000000000000000000008 (bvadd b #x0000000000000000000000000000000000000000000000000000000000000001 )))\
-            )\
-        \
-            (	ite (= #x0000000000000000000000000000000000000000000000000000000000000000\
-                    (bvand x (bvshl #x0000000000000000000000000000000000000000000000000000000000000001 (bvsub move #x0000000000000000000000000000000000000000000000000000000000000001 ))))\
-            x\
-            (bvor x (bvshl #xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff move)))\
-            )\
-        )\n";
-    static string def_byte =
-        "(define-fun byte ((b (_ BitVec 256)) (x (_ BitVec 256))) (_ BitVec 256)\
-            (let (\
-            (move (bvmul #x0000000000000000000000000000000000000000000000000000000000000008  b ))\
-            )\
-            (bvlshr (bvand x (bvlshr #xff00000000000000000000000000000000000000000000000000000000000000 move)) (bvmul #x0000000000000000000000000000000000000000000000000000000000000008 (bvsub #x000000000000000000000000000000000000000000000000000000000000001f b)) )\
-            )\
-        )\n";
-
-    static string def_my_exp =
-        "(\
-            define-fun my_exp ((x (_ BitVec 256)) (y (_ BitVec 256))) (_ BitVec 256)\
-                ((_ int2bv 256) (to_int (^ (bv2int x) (bv2int y))) )\
-        )\n";
-    static string def_my_bvshl =
-        "(define-fun my_bvshl ((x (_ BitVec 256)) (y (_ BitVec 256))) (_ BitVec 256)\
-            (bvshl y x))\n";
-    static string def_my_bvashr =
-        "(define-fun my_bvashr ((x (_ BitVec 256)) (y (_ BitVec 256))) (_ BitVec 256)\
-            (bvashr y x))\n";
-    static string def_my_bvlshr =
-        "(define-fun my_bvlshr ((x (_ BitVec 256)) (y (_ BitVec 256))) (_ BitVec 256)\
-            (bvlshr y x))\n";
-    static string def_my_bvgt =
-        "(define-fun my_bvgt ((x (_ BitVec 256)) (y (_ BitVec 256))) (_ BitVec 256)\
-            (ite (bvugt x y) \
-            #x0000000000000000000000000000000000000000000000000000000000000001\
-            #x0000000000000000000000000000000000000000000000000000000000000000\
-        ))\n";
-    static string def_my_bvsgt =
-        "(define-fun my_bvsgt ((x (_ BitVec 256)) (y (_ BitVec 256))) (_ BitVec 256)\
-            (ite (bvsgt x y) \
-            #x0000000000000000000000000000000000000000000000000000000000000001\
-            #x0000000000000000000000000000000000000000000000000000000000000000\
-        ))\n";
-    static string def_my_bvlt =
-        "(define-fun my_bvlt ((x (_ BitVec 256)) (y (_ BitVec 256))) (_ BitVec 256)\
-            (ite (bvult x y) \
-            #x0000000000000000000000000000000000000000000000000000000000000001\
-            #x0000000000000000000000000000000000000000000000000000000000000000\
-        ))\n";
-    static string def_my_bvslt =
-        "(define-fun my_bvslt ((x (_ BitVec 256)) (y (_ BitVec 256))) (_ BitVec 256)\
-            (ite (bvslt x y) \
-            #x0000000000000000000000000000000000000000000000000000000000000001\
-            #x0000000000000000000000000000000000000000000000000000000000000000\
-        ))\n";
-    static string def_my_eq =
-        "(define-fun my_eq ((x (_ BitVec 256)) (y (_ BitVec 256))) (_ BitVec 256)\
-            (ite (= x y) \
-            #x0000000000000000000000000000000000000000000000000000000000000001\
-            #x0000000000000000000000000000000000000000000000000000000000000000\
-        ))\n";
-    static string def_iszero =
-        "(define-fun isZero ((x (_ BitVec 256))) (_ BitVec 256)\
-            (ite (= x #x0000000000000000000000000000000000000000000000000000000000000000) \
-            #x0000000000000000000000000000000000000000000000000000000000000001\
-            #x0000000000000000000000000000000000000000000000000000000000000000\
-        ))\n";
-    static string def_sha3_1arg =
-        "(define-fun sha3_1arg ((x (_ BitVec 256))) (_ BitVec 256)\
-            #xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\
-        )\n";
-    static string def_sha3 =
-        "(define-fun sha3 ((x (_ BitVec 256))) (_ BitVec 256)\
-            #xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\
-        )\n";
-    static string def_sha3_2arg =
-        "(define-fun sha3_2arg ((x (_ BitVec 256)) (y (_ BitVec 256))) (_ BitVec 256)\
-            #xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\
-        )\n";
-
-    static string define_functions_prologue =
-    def_iszero
-    +def_byte
-    +def_signextend
-    +def_my_exp
-    +def_my_bvshl
-    +def_my_bvashr
-    +def_my_bvlshr
-    +def_my_eq
-    +def_my_bvgt
-    +def_my_bvsgt
-    +def_my_bvlt
-    +def_my_bvslt
-    +def_sha3
-    +def_sha3_1arg
-    +def_sha3_2arg;
-
-
-
     z3::context c;
     z3::solver s(c);
 
     std::map<string,string> encoded_variable_names;
+
+    bool isPredefinedFunction(string op){
+        if (op == "isZero"     ||
+            op == "byte"       ||
+            op == "signextend" ||
+            op == "my_exp"     ||
+            op == "my_bvshl"   ||
+            op == "my_bvashr"  ||
+            op == "my_bvlshr"  ||
+            op == "my_eq"      ||
+            op == "my_bvgt"    ||
+            op == "my_bvsgt"   ||
+            op == "my_bvlt"    ||
+            op == "my_bvslt"   ||
+            op == "sha3"       ||
+            op == "sha3_1arg"  ||
+            op == "sha3_2arg") {
+                return false;
+            }
+        else {
+            return true;
+        }
+    }
+
+    string inline_user_defined_function(string op, string lexpr, string rexpr) {
+        if(op == "isZero") {
+            return "(ite (= "+ lexpr +" #x0000000000000000000000000000000000000000000000000000000000000000)"
+                   " #x0000000000000000000000000000000000000000000000000000000000000001"
+                   " #x0000000000000000000000000000000000000000000000000000000000000000"
+                   ")";
+        }
+        if(op == "byte") {
+            return "(let ("
+                   " (move (bvmul #x0000000000000000000000000000000000000000000000000000000000000008  " + lexpr + " ))"
+                   " )"
+                   " (bvlshr (bvand " + rexpr + " (bvlshr #xff00000000000000000000000000000000000000000000000000000000000000 move)) (bvmul #x0000000000000000000000000000000000000000000000000000000000000008 (bvsub #x000000000000000000000000000000000000000000000000000000000000001f "+ lexpr +")) )"
+                   ")";
+        }
+        if(op == "signextend") {
+            return "(let ("
+                   "(move (bvmul #x0000000000000000000000000000000000000000000000000000000000000008 (bvadd "+ lexpr +" #x0000000000000000000000000000000000000000000000000000000000000001 )))"
+                   ")"
+                   "(ite (= #x0000000000000000000000000000000000000000000000000000000000000000"
+                   "        (bvand " + rexpr + " (bvshl #x0000000000000000000000000000000000000000000000000000000000000001 (bvsub move #x0000000000000000000000000000000000000000000000000000000000000001 ))))"
+                   " " + rexpr + " "
+                   "(bvor " + rexpr + " (bvshl #xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff move)))"
+                   ")";
+        }
+        if(op == "my_exp") {
+            return "((_ int2bv 256) (to_int (^ (bv2int "+ lexpr +") (bv2int "+ rexpr +"))) )";
+
+        }
+        if(op == "my_bvshl") {
+            return "(bvshl "+ rexpr +" "+ lexpr +")";
+        }
+        if(op == "my_bvashr") {
+            return "(bvashr "+ rexpr +" "+ lexpr +")";
+        }
+        if(op == "my_bvlshr") {
+            return "(bvlshr "+ rexpr+" "+lexpr+")";
+        }
+        if(op == "my_eq") {
+            return "(ite (= "+ lexpr +" "+ rexpr +")"
+                   " #x0000000000000000000000000000000000000000000000000000000000000001"
+                   " #x0000000000000000000000000000000000000000000000000000000000000000"
+                   ")";
+        }
+        if(op == "my_bvgt") {
+            return  "(ite (bvugt "+ lexpr +" "+ rexpr +")"
+                    " #x0000000000000000000000000000000000000000000000000000000000000001"
+                    " #x0000000000000000000000000000000000000000000000000000000000000000"
+                    ")";
+        }
+        if(op == "my_bvsgt") {
+            return  "(ite (bvsgt "+ lexpr +" "+ rexpr +")"
+                    " #x0000000000000000000000000000000000000000000000000000000000000001"
+                    " #x0000000000000000000000000000000000000000000000000000000000000000"
+                    ")";
+        }
+        if(op == "my_bvlt") {
+            return  "(ite (bvult " + lexpr + " "+ rexpr +")"
+                    " #x0000000000000000000000000000000000000000000000000000000000000001"
+                    " #x0000000000000000000000000000000000000000000000000000000000000000"
+                    ")";
+        }
+        if(op == "my_bvslt") {
+            return  "(ite (bvslt "+ lexpr +" "+ rexpr +")"
+                    " #x0000000000000000000000000000000000000000000000000000000000000001"
+                    " #x0000000000000000000000000000000000000000000000000000000000000000"
+                    ")";
+        }
+        if(op == "sha3"){
+            return "#xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        }
+        if(op == "sha3_1arg"){
+            return "#xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        }
+        if(op == "sha3_2arg"){
+            return "#xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        }
+        throw op;
+    }
 
     string change_representation(string smt_bv_constant) {
         string symbolic_constant = smt_bv_constant;
@@ -230,7 +228,8 @@ extern "C"
         return entry_list;
     }
 
-    unordered_map<string, souffle::RamDomain> cache_smt_response_with_model;
+    // hash<string> hasher;
+    unordered_map<string, souffle::RamDomain> cache_smt_response_with_model = {};
     souffle::RamDomain smt_response_with_model(
             souffle::SymbolTable* symbol_table, souffle::RecordTable* record_table,
             souffle::RamDomain text) {
@@ -249,8 +248,8 @@ extern "C"
 
         s.push();
         s.from_string((
-            define_functions_prologue
-            +stext).c_str());
+            // define_functions_prologue+
+            stext).c_str());
         z3::check_result solver_result = s.check();
         s.pop();
 
@@ -285,9 +284,9 @@ extern "C"
         }
     }
 
-    std::set<string> global_set_for_vars;
-    std::set<string> global_set_for_bounded_vars;
-    std::map<string,string> operator_mapping;
+    std::set<string> global_set_for_vars = {};
+    std::set<string> global_set_for_bounded_vars = {};
+    std::map<string,string> operator_mapping = {};
 
     void populate_operator_mapping() {
 
@@ -470,8 +469,25 @@ extern "C"
             return ans;
         }
 
-        string ans = (is_leaf ? "" : "(") + (is_leaf ? root_symbol : operator_mapping.at(root_symbol)) + " " + parse_tree_expr(symbol_table, record_table, left);
-        ans = ans + " " + parse_tree_expr(symbol_table, record_table, right) + (is_leaf ? "" : ")");
+
+        string lexpr = parse_tree_expr(symbol_table, record_table, left);
+        string rexpr = parse_tree_expr(symbol_table, record_table, right);
+        string ans;
+        if(is_leaf) {
+            ans = root_symbol;
+            ans = ans + " " ;
+        }
+        else {
+            string op = operator_mapping.at(root_symbol);
+            if(isPredefinedFunction(op)) {
+                ans = "(" + op + " " + lexpr;
+                ans = ans + " " + rexpr + ")";
+            }
+            else {
+                // do the inlineing of the user-definfed functions
+                ans = inline_user_defined_function(op, lexpr, rexpr);
+            }
+        }
         return ans;
     }
 
@@ -495,6 +511,9 @@ extern "C"
     void add_bounded_variables(
              souffle::SymbolTable *symbol_table, souffle::RecordTable *record_table, souffle::RamDomain arg_bound_vars) {
         string current_id;
+        if (arg_bound_vars == 0) {
+            return;
+        }
         const souffle::RamDomain* my_tuple = record_table->unpack(arg_bound_vars, 2);
         current_id = symbol_table->decode(my_tuple[0]);
         cleanup_and_insert(current_id);
@@ -516,12 +535,11 @@ extern "C"
     /**
      * Implement smt-lib mapping!
      */
-    souffle::RamDomain printToSmtStyle(
+    souffle::RamDomain print_to_smt_style(
         souffle::SymbolTable *symbol_table, souffle::RecordTable *record_table, souffle::RamDomain arg, souffle::RamDomain arg_bound_vars) {
         //TODO: global sets have to be cleared in every print_to_smt call, since we bound
         global_set_for_bounded_vars.clear();
         global_set_for_vars.clear();
-
 
 
         assert(symbol_table && "NULL symbol table");
