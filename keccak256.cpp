@@ -1,4 +1,5 @@
 #include <boost/multiprecision/cpp_int.hpp>
+#include <boost/algorithm/hex.hpp>
 #include <string.h>
 
 using namespace boost::multiprecision;
@@ -35,7 +36,7 @@ extern "C"
 
   const char* hex_keccak_256(const char* input) {
     thread_local static char out_str[67] = {"0x"};
-    thread_local static char out[32] = {0};
+    thread_local static char out[32] = {};
 
     const size_t input_len = strlen(input);
     const size_t input_byte_len = input_len/2 - 1;
@@ -51,12 +52,12 @@ extern "C"
     Keccak_HashFinal(&hi, (unsigned char*)out);
 
     free(input_bytes);
-
-    for (int i = 0; i < 32; ++i) {
-        unsigned char c = out[i];
-        out_str[2 + 2*i]     = num_to_hex(c >> 4);
-        out_str[2 + 2*i + 1] = num_to_hex(c & 0x0f);
-    }
+    // this part is needed to normalize the hexadecimal output
+    string str_result;
+    boost::algorithm::hex(out, out + 32, std::back_inserter(str_result));
+    transform(str_result.begin(), str_result.end(), str_result.begin(), ::tolower);
+    str_result.erase(0, str_result.find_first_not_of('0'));
+    strcpy(out_str+2, str_result.c_str());;
   
     return out_str;
   }

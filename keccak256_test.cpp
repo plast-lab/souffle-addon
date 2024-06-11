@@ -58,3 +58,11 @@ BOOST_AUTO_TEST_CASE(test_hash_hex_keccak_256_two_bytes) {
 	    "0x67fad3bfa1e0321bd021ca805ce14876e50acac8ca8532eda8cbf924da565160"
     );
 }
+
+BOOST_AUTO_TEST_CASE(test_hash_hex_keccak_256_needs_normalization) {
+	BOOST_TEST(
+        hex_keccak_256("0x0000000000000000000000000000000000000000000000000000000000000005")
+	    ==
+	    "0x36b6384b5eca791c62761152d0c79bb0604c104a5fb6f4eb0703f3154bb3db0"
+    );
+}
