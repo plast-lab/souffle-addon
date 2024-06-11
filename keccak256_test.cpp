@@ -27,6 +27,15 @@ BOOST_AUTO_TEST_CASE(test_hash_signature) {
     );
 }
 
+// output has leading zeros, we normalize that
+BOOST_AUTO_TEST_CASE(test_hash_signature_needs_normalization) {
+	BOOST_TEST(
+        keccak_256("approve(address,uint256)")
+	    ==
+	    "0x95ea7b334ae44009aa867bfb386f5c3b4b443ac6f0ee573fa91c4608fbadfba"
+    );
+}
+
 BOOST_AUTO_TEST_CASE(test_hex_to_str) {
 	BOOST_TEST(
         hex_to_str("0x72656365697665417070726f76616c28616464726573732c75696e743235362c616464726573732c627974657329")
@@ -59,6 +68,7 @@ BOOST_AUTO_TEST_CASE(test_hash_hex_keccak_256_two_bytes) {
     );
 }
 
+// output has leading zeros, we normalize that
 BOOST_AUTO_TEST_CASE(test_hash_hex_keccak_256_needs_normalization) {
 	BOOST_TEST(
         hex_keccak_256("0x0000000000000000000000000000000000000000000000000000000000000005")

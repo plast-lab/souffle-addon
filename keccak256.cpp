@@ -25,11 +25,12 @@ extern "C"
     Keccak_HashUpdate(&hi, (const unsigned char*)input, strlen(input) * 8);
     Keccak_HashFinal(&hi, (unsigned char*)out);
 
-    for (int i = 0; i < 32; ++i) {
-        unsigned char c = out[i];
-        out_str[2 + 2*i]     = num_to_hex(c >> 4);
-        out_str[2 + 2*i + 1] = num_to_hex(c & 0x0f);
-    }
+    // this part is needed to normalize the hexadecimal output
+    string str_result;
+    boost::algorithm::hex(out, out + 32, std::back_inserter(str_result));
+    transform(str_result.begin(), str_result.end(), str_result.begin(), ::tolower);
+    str_result.erase(0, str_result.find_first_not_of('0'));
+    strcpy(out_str+2, str_result.c_str());;
   
     return out_str;
   }
