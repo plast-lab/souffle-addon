@@ -7,7 +7,7 @@ on:
     branches: [ "master" ]
 
 jobs:
-  build:
+  build-and-test:
 
     runs-on: ubuntu-latest
 
@@ -20,3 +20,7 @@ jobs:
       run: make libsoufflenum.so
     - name: Test
       run: make
+    - name: Run lists_test.dl
+      run: souffle lists_test.dl
+    - name: Run smt-testing.dl
+      run: souffle smt-testing.dl
