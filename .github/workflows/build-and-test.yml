@@ -24,3 +24,31 @@ jobs:
       run: souffle lists_test.dl
     - name: Run smt-testing.dl
       run: souffle smt-testing.dl
+
+  build-and-test-with-package:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Souffle
+      run: |
+        sudo wget https://souffle-lang.github.io/ppa/souffle-key.public -O /usr/share/keyrings/souffle-archive-keyring.gpg
+        echo "deb [signed-by=/usr/share/keyrings/souffle-archive-keyring.gpg] https://souffle-lang.github.io/ppa/ubuntu/ stable main" | sudo tee /etc/apt/sources.list.d/souffle.list
+        sudo apt update && sudo apt install souffle=2.4
+
+    - name: Test Souffle
+      run: souffle --version
+
+    - name: Install Boost
+      run: sudo apt install libboost-all-dev
+
+    - name: Build
+      run: make libsoufflenum.so
+    - name: Test
+      run: make
+    - name: Run lists_test.dl
+      run: souffle lists_test.dl
+    - name: Run smt-testing.dl
+      run: souffle smt-testing.dl
