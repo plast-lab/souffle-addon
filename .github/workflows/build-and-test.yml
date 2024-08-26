@@ -1,0 +1,22 @@
+name: Build and Test Functors
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    container:
+      image: ghcr.io/nevillegrech/gigahorse-toolchain-deps-souffle24:latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build
+      run: make libsoufflenum.so
+    - name: Test
+      run: make
