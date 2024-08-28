@@ -45,7 +45,7 @@ jobs:
       run: sudo apt install libboost-all-dev
 
     - name: Install z3
-      run: sudo apt install libz3-dev
+      run: sudo apt install libz3-dev z3
 
     - name: Build
       run: make libsoufflenum.so
