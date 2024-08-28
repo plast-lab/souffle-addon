@@ -16,6 +16,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Test Souffle
+      run: souffle --version
+
     - name: Build
       run: make libsoufflenum.so
     - name: Test
