@@ -8,45 +8,45 @@ KECCAK_OBJ := $(patsubst $(KECCAK_DIR)/%.c,$(KECCAK_DIR)/%.o, $(KECCAK_SRC))
 all: libsoufflenum.so num_tests mappings_tests keccak256_tests
 
 libsoufflenum.so: $(KECCAK_OBJ) num256.o mappings.o keccak256.o lists.o smt-api.o
-	g++ -std=c++17 -shared -o libsoufflenum.so $(KECCAK_OBJ) smt-api.o num256.o mappings.o keccak256.o lists.o -march=native -lz3
+	g++ -std=c++17 -shared -o libsoufflenum.so $(KECCAK_OBJ) smt-api.o num256.o mappings.o keccak256.o lists.o -march=native -lz3 -fopenmp
 	ln -sf libsoufflenum.so libfunctors.so 
 
 smt-api.o: smt-api.cpp
-	g++ -std=c++17  smt-api.cpp -lz3 -c -fPIC -o smt-api.o
+	g++ -std=c++17  smt-api.cpp -lz3 -fopenmp -c -fPIC -o smt-api.o
 
 num256.o: num256.cpp
-	g++ -std=c++17 -O2 num256.cpp -c -fPIC -o num256.o -lz3
+	g++ -std=c++17 -O2 num256.cpp -c -fPIC -o num256.o -lz3 -fopenmp
 
 num_tests:	num256.cpp num256_test.cpp 
-	g++ -std=c++17 -o num_tests num256_test.cpp
+	g++ -std=c++17 -o num_tests num256_test.cpp -fopenmp
 	./num_tests
 
 mappings.o: mappings.cpp
-	g++ -std=c++17 -O2 mappings.cpp -c -fPIC -o mappings.o -lz3
+	g++ -std=c++17 -O2 mappings.cpp -c -fPIC -o mappings.o -lz3 -fopenmp
 
 mappings_tests:	mappings.cpp mappings_test.cpp
-	g++ -std=c++17 -o mappings_tests mappings_test.cpp
+	g++ -std=c++17 -o mappings_tests mappings_test.cpp -fopenmp
 	./mappings_tests
 
 lists.o: lists.cpp
-	g++ -std=c++17 -O2 lists.cpp -c -fPIC -o lists.o -lz3
+	g++ -std=c++17 -O2 lists.cpp -c -fPIC -o lists.o -lz3 -fopenmp
 
 lists_tests:	lists.cpp lists_test.cpp
-	g++ -std=c++17 -o lists_tests lists_test.cpp
+	g++ -std=c++17 -o lists_tests lists_test.cpp -fopenmp
 	./lists_tests
 
 keccak256.o: keccak256.cpp
-	g++ -std=c++17 -O2 keccak256.cpp -c -fPIC -o keccak256.o
+	g++ -std=c++17 -O2 keccak256.cpp -c -fPIC -o keccak256.o -fopenmp
 
 keccak256_test.o: keccak256_test.cpp keccak256.cpp
-	g++ -std=c++17 -O2 -c -o keccak256_test.o keccak256_test.cpp
+	g++ -std=c++17 -O2 -c -o keccak256_test.o keccak256_test.cpp -fopenmp
 
 keccak256_tests: keccak256_test.o $(KECCAK_OBJ)
-	g++ -std=c++17 keccak256_test.o $(KECCAK_OBJ) -o keccak256_tests
+	g++ -std=c++17 keccak256_test.o $(KECCAK_OBJ) -o keccak256_tests -fopenmp
 	./keccak256_tests
 
 $(KECCAK_DIR)/%.o: $(KECCAK_DIR)/%.c $(KECCAK_SRC)
-	gcc -O2 -c -fPIC -o $@ $<
+	gcc -O2 -fopenmp -c -fPIC -o $@ $<
 
 softclean:
 	rm -f $(KECCAK_OBJ)
