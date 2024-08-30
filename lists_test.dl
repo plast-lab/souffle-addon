@@ -37,3 +37,9 @@ TestAppend(a, b, @list_append(a, b)):-
   a = ["0x8d8", ["0xf48", ["0xd05", ["0xd4b", ["0x91d", nil]]]]],
   b = "0x1457",
   @list_append(a, b) =  ["0x8d8", ["0xf48", ["0xd05", ["0xd4b", ["0x91d", ["0x1457", nil]]]]]].
+
+.decl BreakSouffle(x:StringList)
+BreakSouffle(["ddd", nil]).
+BreakSouffle(@list_append(["ddd", nil], "ddd")) :- BreakSouffle(["ddd", nil]).
+
+.output BreakSouffle

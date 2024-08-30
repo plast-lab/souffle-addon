@@ -1,0 +1,57 @@
+name: Build and Test Functors
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build-and-test-32bit-wordsize:
+    # Souffle with a 32bit word size is built inside our "Gigahorse dependencies" docker image
+    runs-on: ubuntu-22.04
+
+    container:
+      image: ghcr.io/nevillegrech/gigahorse-toolchain-deps-souffle24:latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Test Souffle
+      run: souffle --version
+
+    - name: Build
+      run: make libsoufflenum.so WORD_SIZE=$(souffle --version | sed -n 3p | cut -c12,13)
+    - name: Test
+      run: make WORD_SIZE=$(souffle --version | sed -n 3p | cut -c12,13)
+    - name: Run lists_test.dl
+      run: souffle lists_test.dl
+    - name: Run smt-testing.dl
+      run: souffle smt-testing.dl
+
+  build-and-test-64bit-wordsize:
+    # Souffle with a 64bit word size is installed on the runner via the provided .deb files
+    runs-on: ubuntu-22.04
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download souffle
+      run: wget -O souffle.deb https://github.com/souffle-lang/souffle/releases/download/2.4.1/x86_64-ubuntu-2004-souffle-2.4.1-Linux.deb
+    - name: Install souffle
+      run: sudo apt-get install ./souffle.deb -y
+
+    - name: Test Souffle
+      run: souffle --version
+
+    - name: Install Boost
+      run: sudo apt install libboost-all-dev
+
+    - name: Build
+      run: make libsoufflenum.so WORD_SIZE=$(souffle --version | sed -n 3p | cut -c12,13)
+    - name: Test
+      run: make WORD_SIZE=$(souffle --version | sed -n 3p | cut -c12,13)
+    - name: Run lists_test.dl
+      run: souffle lists_test.dl
+    - name: Run smt-testing.dl
+      run: souffle smt-testing.dl
