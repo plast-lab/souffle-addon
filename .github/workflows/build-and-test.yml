@@ -7,9 +7,9 @@ on:
     branches: [ "master" ]
 
 jobs:
-  build-and-test:
-
-    runs-on: ubuntu-latest
+  build-and-test(32bit):
+    # Souffle with a 32bit word size is built inside our "Gigahorse dependencies" docker image
+    runs-on: ubuntu-22.04
 
     container:
       image: ghcr.io/nevillegrech/gigahorse-toolchain-deps-souffle24:latest
@@ -29,8 +29,8 @@ jobs:
     - name: Run smt-testing.dl
       run: souffle smt-testing.dl
 
-  build-and-test-with-package:
-
+  build-and-test(64bit):
+    # Souffle with a 64bit word size is installed on the runner via the provided .deb files
     runs-on: ubuntu-22.04
 
     steps:
