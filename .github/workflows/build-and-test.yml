@@ -21,9 +21,9 @@ jobs:
       run: souffle --version
 
     - name: Build
-      run: make libsoufflenum.so
+      run: make libsoufflenum.so WORD_SIZE=$(souffle --version | sed -n 3p | cut -c12,13)
     - name: Test
-      run: make
+      run: make WORD_SIZE=$(souffle --version | sed -n 3p | cut -c12,13)
     - name: Run lists_test.dl
       run: souffle lists_test.dl
     - name: Run smt-testing.dl
@@ -48,9 +48,9 @@ jobs:
       run: sudo apt install libboost-all-dev
 
     - name: Build
-      run: make libsoufflenum.so
+      run: make libsoufflenum.so WORD_SIZE=$(souffle --version | sed -n 3p | cut -c12,13)
     - name: Test
-      run: make
+      run: make WORD_SIZE=$(souffle --version | sed -n 3p | cut -c12,13)
     - name: Run lists_test.dl
       run: souffle lists_test.dl
     - name: Run smt-testing.dl
