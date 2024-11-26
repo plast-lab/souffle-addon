@@ -28,10 +28,20 @@ extern "C" {
     transform(str_result.begin(), str_result.end(), str_result.begin(), ::tolower);
     strcpy(out+2, str_result.c_str());
     return out;
-  }  
+  }
   
   int32_t hex_to_number(const char *x) {
     return (int32_t) uint256_t(x).template convert_to<int>();
+  }
+
+  // remove leading zeros if needed
+  const char* hex_normalized(const char *in_hex) {
+    thread_local static char out[STRING_LEN] = {"0x"};
+    uint256_t my_x(in_hex);
+    string str_result = my_x.str(32, std::ios_base::hex);
+    transform(str_result.begin(), str_result.end(), str_result.begin(), ::tolower);
+    strcpy(out+2, str_result.c_str());
+    return out;
   }
 
   int32_t max2(int32_t x, int32_t y) {
