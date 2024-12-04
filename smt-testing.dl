@@ -27,19 +27,19 @@
 
 .decl ToSmt(x : Expr, result: SmtResult)
 ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
-    ColumnToArray(boundVarsList),
+    BoundVarsList(boundVarsList),
     x = ["FORALLSTAR", YV,["GT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, ZV]]],   /// we lost y variable here !!
         ["ADD", ["ADD", YV, XV], XV]]].                                        /// debug !
 ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
-    ColumnToArray(boundVarsList),
+    BoundVarsList(boundVarsList),
     x = ["SLT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]],
         ["ADD", ["ADD", YV, XV], XV]].
 ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
-    ColumnToArray(boundVarsList),
+    BoundVarsList(boundVarsList),
     x = ["LT", XV,
         CONST].
 ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
-    ColumnToArray(boundVarsList),
+    BoundVarsList(boundVarsList),
     x = ["FORALLSTAR", XV,
     ["LT", ZV,
         ["ADD", ["SUB", XV, XV], YV]]
@@ -52,27 +52,27 @@ ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
 //     ]].
 
 ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
-    ColumnToArray(boundVarsList),
+    BoundVarsList(boundVarsList),
     x = ["LT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]],
                 ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]]].
 ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
-    ColumnToArray(boundVarsList),
+    BoundVarsList(boundVarsList),
     x = ["SLT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]],
                 ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]]].
 ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
-    ColumnToArray(boundVarsList),
+    BoundVarsList(boundVarsList),
     x = ["FORALLSTAR",YV,["LT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]],
                 ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]]]].
 ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
-    ColumnToArray(boundVarsList),
+    BoundVarsList(boundVarsList),
     x = ["EQ", XV,
              ["ADD", ["0x0f", nil, nil], ["0x0f", nil, nil]]].
 ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
-    ColumnToArray(boundVarsList),
+    BoundVarsList(boundVarsList),
     x = ["EQ", XV,
              ["ADD", ["0x0f", nil, nil], ["0xf", nil, nil]]].
 ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList))) :-
-    ColumnToArray(boundVarsList),
+    BoundVarsList(boundVarsList),
     x = ["EQ", ["0xf", nil, nil],
              ["0xffff", nil, nil]].
     /**
@@ -192,11 +192,11 @@ Input_List(next, list):-
     Input_List(id, prev_list),
     list = [next, prev_list].
 
-.decl ColumnToArray(ans : BoundVarsArrayType)
-ColumnToArray(ans) :-
+.decl BoundVarsList(ans : BoundVarsArrayType)
+BoundVarsList(ans) :-
     Input_List(last, ans),
     Last(last).
-.output ColumnToArray
+.output BoundVarsList
 
 
 // Unit Tests :
@@ -204,7 +204,7 @@ ColumnToArray(ans) :-
 .decl TestRun(expr : Expr, res : SmtResult, exp_res : SmtResult)
 TestRun(expr, res, exp_res) :-
   TestCase(expr, exp_res),
-  ColumnToArray(model),
+  BoundVarsList(model),
   res =  @smt_response_with_model(@print_to_smt_style(expr, model)).
 .output TestRun
 
