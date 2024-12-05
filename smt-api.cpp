@@ -248,7 +248,6 @@ souffle::RamDomain smt_response_with_model(souffle::SymbolTable *symbol_table, s
                     stext)
                     .c_str());
   z3::check_result solver_result = s.check();
-  s.pop();
 
   souffle::RamDomain result;
   switch (solver_result) {
@@ -257,6 +256,7 @@ souffle::RamDomain smt_response_with_model(souffle::SymbolTable *symbol_table, s
       res[1] = 0;
       result = record_table->pack(&res[0], 2);
       cache_smt_response_with_model[stext] = result;
+      s.pop();
       return result;
     case sat:
       // DEBUG_MSG(s.get_model());
@@ -271,12 +271,14 @@ souffle::RamDomain smt_response_with_model(souffle::SymbolTable *symbol_table, s
       res[1] = map_list_to_tuples(l, record_table);
       result = record_table->pack(&res[0], 2);
       cache_smt_response_with_model[stext] = result;
+      s.pop();
       return result;
     default:
       res[0] = symbol_table->encode("uknown");
       res[1] = 0;
       result = record_table->pack(&res[0], 2);
       cache_smt_response_with_model[stext] = result;
+      s.pop();
       return result;
   }
 }
