@@ -1,0 +1,19 @@
+.decl numbers(x:number)
+.decl sum_result(x:number)
+.decl hsum_result(x:number)
+.output sum_result()
+.output hsum_result()
+.functor hashsum(i1:number, i2:number):number stateful
+
+numbers(-1).
+numbers(1).
+numbers(2).
+numbers(3).
+numbers(4).
+numbers(5).
+
+sum_result(x) :-
+    x = sum a : { numbers(a), a > 0 }.
+
+hsum_result(x) :- 
+    x = @@hashsum a : 0, { numbers(a), a > 0 }.

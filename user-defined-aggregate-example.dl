@@ -1,0 +1,38 @@
+// Souffle - A Datalog Compiler
+// Copyright (c) 2022, The Souffle Developers. All rights reserved
+// Licensed under the Universal Permissive License v 1.0 as shown at:
+// - https://opensource.org/licenses/UPL
+// - <souffle root>/licenses/SOUFFLE-UPL.txt
+
+.type AbstractValue = [lb:number, ub:number]
+
+// builds the AbstractValues [0, 1], [1, 2], ... [999, 1000]
+.decl A(i:AbstractValue)
+A([x,x+1]) :- x = range(0, 1000).
+
+.functor lub(i1:AbstractValue, i2:AbstractValue):AbstractValue stateful
+
+
+.decl B(i:AbstractValue)
+.output B
+
+/*
+res = [0,0]
+for (x s.t A(x)) {
+  res = @lub(res, x);
+}
+insert res into B
+*/
+B(i) :-
+  i = @@lub x : [0,0], {A(x)}.
+
+.functor lub_number(i1:AbstractValue, x:number):AbstractValue stateful
+
+.decl N(x:number)
+N(x) :- x = range(0, 1000).
+
+.decl C(i:AbstractValue)
+.output C
+
+C(i) :-
+  i = @@lub_number x : [0,0], {N(x)}.

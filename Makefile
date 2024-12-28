@@ -8,17 +8,23 @@ WORD_SIZE=32
 # rudimentary
 all: libsoufflenum.so num_tests mappings_tests keccak256_tests
 
-libsoufflenum.so: $(KECCAK_OBJ) num256.o mappings.o keccak256.o lists.o smt-api.o
-	g++ -std=c++17 -shared -o libsoufflenum.so $(KECCAK_OBJ) smt-api.o num256.o mappings.o keccak256.o lists.o -march=native -lz3 -fopenmp -DRAM_DOMAIN_SIZE=$(WORD_SIZE)
+libsoufflenum.so: $(KECCAK_OBJ) num256.o mappings.o keccak256.o lists.o smt-api.o hashsum_functor.o lub_functor.o
+	g++ -std=c++17 -shared -o libsoufflenum.so $(KECCAK_OBJ) smt-api.o num256.o mappings.o keccak256.o lists.o hashsum_functor.o lub_functor.o -march=native -lz3 -fopenmp -DRAM_DOMAIN_SIZE=$(WORD_SIZE)
 	ln -sf libsoufflenum.so libfunctors.so
 
+hashsum_functor.o: hashsum_functor.cpp
+	g++ -std=c++17 hashsum_functor.cpp -lz3 -fopenmp -DRAM_DOMAIN_SIZE=$(WORD_SIZE) -c -fPIC -o hashsum_functor.o
+
+lub_functor.o: lub_functor.cpp
+	g++ -std=c++17 lub_functor.cpp -lz3 -fopenmp -DRAM_DOMAIN_SIZE=$(WORD_SIZE) -c -fPIC -o lub_functor.o
+
 smt-api.o: smt-api.cpp
-	g++ -std=c++17  smt-api.cpp -lz3 -fopenmp -DRAM_DOMAIN_SIZE=$(WORD_SIZE) -c -fPIC -o smt-api.o
+	g++ -std=c++17 smt-api.cpp -lz3 -fopenmp -DRAM_DOMAIN_SIZE=$(WORD_SIZE) -c -fPIC -o smt-api.o
 
 num256.o: num256.cpp
 	g++ -std=c++17 -O2 num256.cpp -c -fPIC -o num256.o -lz3 -fopenmp
 
-num_tests:	num256.cpp num256_test.cpp 
+num_tests: num256.cpp num256_test.cpp 
 	g++ -std=c++17 -o num_tests num256_test.cpp
 	./num_tests
 
