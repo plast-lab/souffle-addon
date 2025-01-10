@@ -15,23 +15,20 @@ using FF_float = float;
 extern "C" {
     souffle::RamDomain hashsum(souffle::SymbolTable* symbolTable, souffle::RecordTable* recordTable,
             souffle::RamDomain arg1, souffle::RamDomain arg2);
-    unsigned long djb2(const std::string &str);
+    unsigned long djb2(const souffle::RamDomain &num);
 }
 
 souffle::RamDomain hashsum(souffle::SymbolTable* symbolTable, souffle::RecordTable* recordTable, souffle::RamDomain arg1, souffle::RamDomain arg2) {
     assert(symbolTable && "NULL symbol table");
     assert(recordTable && "NULL record table");
 
-    std::string result = std::to_string(arg1 + djb2(std::to_string(arg2)));
-    //return arg1 + djb2(std::to_string(arg2));
-    return arg1 + djb2(std::to_string(arg2));
+    // std::string result = std::to_string(arg1 + djb2(std::to_string(arg2)));
+    // return arg1 + djb2(std::to_string(arg2));
+    return arg1 ^ djb2(arg2);
 }
 
-unsigned long djb2(const std::string &str) {
+unsigned long djb2(const souffle::RamDomain &num) {
     unsigned long hash = 5381; // Initialize hash with a prime number
-    for (char c : str) {
-        // Multiply hash by 33 and add the current character
-        hash = ((hash << 5) + hash) + c; // hash * 33 + c
-    }
+    hash += (num * num) ^ num;
     return hash;
 }

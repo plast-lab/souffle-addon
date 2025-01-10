@@ -97,15 +97,9 @@ ClientServerIndex(c, s, ci*ns + si) :-
   serverId : ServerId
 ]
 
-.type LockedState = [
-  serverIndex: number,
-  rest: LockedState
-]
+.type LockedState <: number
 
-.type HeldState = [
-  clientServerIndex: number,
-  rest: HeldState
-]
+.type HeldState <: number
 
 .type State = [
   locked: LockedState,
@@ -161,12 +155,12 @@ DecomposeAction(a, k, c, s) :-
     DisconnectPossibleAction(prevState, action).
 
   .decl HeldStateFinalized(prevState: State, action: Action, hstate: HeldState)
-  HeldStateFinalized(prevState, action, [id, nil]) :-
+  HeldStateFinalized(prevState, action, as(id, HeldState)) :-
     PossibleAction(prevState, action),
     id = @@hashsum i: 0, {Held_Prime_Index(prevState, action, i)}.
 
   .decl LockedStateFinalized(prevState: State, action: Action, lstate: LockedState)
-  LockedStateFinalized(prevState, action, [id, nil]) :-
+  LockedStateFinalized(prevState, action, as(id, LockedState)) :-
     PossibleAction(prevState, action),
     id = @@hashsum i: 0, {Locked_Prime_Index(prevState, action, i)}.
 
