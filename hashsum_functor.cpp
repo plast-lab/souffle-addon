@@ -23,6 +23,7 @@ souffle::RamDomain hashsum(souffle::SymbolTable* symbolTable, souffle::RecordTab
     assert(recordTable && "NULL record table");
 
     std::string result = std::to_string(arg1 + djb2(std::to_string(arg2)));
+    //return arg1 + djb2(std::to_string(arg2));
     return arg1 + djb2(std::to_string(arg2));
 }
 

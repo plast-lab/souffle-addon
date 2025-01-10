@@ -160,47 +160,15 @@ DecomposeAction(a, k, c, s) :-
     ConnectPossibleAction(prevState, action);
     DisconnectPossibleAction(prevState, action).
 
-  .decl HeldStateUpTo(prevState: State, action: Action, clientServerIndex: number, partialState: HeldState)
-  HeldStateUpTo(prevState, action, index, [index, nil]) :-
-    PossibleAction(prevState, action),
-    index = @@hashsum i: 0, {Held_Prime_Index(prevState, action, i)}.
-
-//   HeldStateUpTo(prevState, action, nextIndex, [nextIndex, prevPartialState]) :-
-//     HeldStateUpTo(prevState, action, prevIndex, prevPartialState),
-//     nextIndex = min(i): {
-//       Held_Prime_Index(prevState, action, i),
-//       i > prevIndex
-//     }.
-      
-  .decl LockedStateUpTo(prevState: State, action: Action, si: number, partialState: LockedState)
-  LockedStateUpTo(prevState, action, index, [index, nil]) :-
-    PossibleAction(prevState, action),
-    index = @@hashsum i: 0, {Locked_Prime_Index(prevState, action, i)}.
-
-//   LockedStateUpTo(prevState, action, nextIndex, [nextIndex, prevPartialState]) :-
-//     LockedStateUpTo(prevState, action, prevIndex, prevPartialState),
-//     nextIndex = min(i): {
-//       Locked_Prime_Index(prevState, action, i),
-//       i > prevIndex
-//     }.    
-  
   .decl HeldStateFinalized(prevState: State, action: Action, hstate: HeldState)
-  HeldStateFinalized(prevState, action, state) :-
-    HeldStateUpTo(prevState, action, maxIndex, state),
-    maxIndex = @@hashsum i: 0, {Held_Prime_Index(prevState, action, i)}.
-
-  HeldStateFinalized(prevState, action, nil) :-
+  HeldStateFinalized(prevState, action, [id, nil]) :-
     PossibleAction(prevState, action),
-    !Held_Prime_Index(prevState, action, _).
+    id = @@hashsum i: 0, {Held_Prime_Index(prevState, action, i)}.
 
   .decl LockedStateFinalized(prevState: State, action: Action, lstate: LockedState)
-  LockedStateFinalized(prevState, action, state) :-
-    LockedStateUpTo(prevState, action, maxIndex, state),
-    maxIndex = @@hashsum i: 0, {Locked_Prime_Index(prevState, action, i)}.
-
-  LockedStateFinalized(prevState, action, nil) :-
+  LockedStateFinalized(prevState, action, [id, nil]) :-
     PossibleAction(prevState, action),
-    !Locked_Prime_Index(prevState, action, _).
+    id = @@hashsum i: 0, {Locked_Prime_Index(prevState, action, i)}.
 
   .decl TotalStateFinalized(state: State, prevState: State, action: Action)
   TotalStateFinalized([ls, hs], prevState, action) :-

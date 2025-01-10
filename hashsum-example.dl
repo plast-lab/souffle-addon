@@ -15,5 +15,6 @@ numbers(5).
 sum_result(x) :-
     x = sum a : { numbers(a), a > 0 }.
 
-hsum_result(x) :- 
+hsum_result(x) :-
+    numbers(a),
     x = @@hashsum a : 0, { numbers(a), a > 0 }.
