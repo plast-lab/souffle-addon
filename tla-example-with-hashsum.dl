@@ -121,6 +121,7 @@ DecomposeAction(a, k, c, s) :-
   /*
    * Main state predicates
    */
+   
   .decl Locked(state: State, server: ServerId)
   .decl Locked_Prime(prevState: State, action: Action, server: ServerId)
   .decl Locked_Prime_Index(prevState: State, action: Action, si: number)
@@ -133,9 +134,12 @@ DecomposeAction(a, k, c, s) :-
   .decl IsState(state: State)
   IsState(state) :-
     (Locked(state, _);
-     Held(state, _, _)),
-    state != nil.
-    
+     Held(state, _, _)).
+
+  .decl ExaminedState(state: State)  // Grows monotonically. Means "will have been examined *after* the current stage".
+  ExaminedState(state) :-
+    IsState(state).
+
   Locked_Prime_Index(prevState, action, si) :-
     Locked_Prime(prevState, action, server),
     ServerIndex(server, si).
@@ -173,9 +177,11 @@ DecomposeAction(a, k, c, s) :-
     !Locked_Prime_Index(prevState, action, _).
 
   .decl TotalStateFinalized(state: State, prevState: State, action: Action)
-  TotalStateFinalized([ls, hs], prevState, action) :-
+  TotalStateFinalized(state, prevState, action) :-
     HeldStateFinalized(prevState, action, hs),
-    LockedStateFinalized(prevState, action, ls).
+    LockedStateFinalized(prevState, action, ls),
+    state = [ls, hs],
+    !ExaminedState(state).
 
 
   /*
@@ -200,14 +206,14 @@ DecomposeAction(a, k, c, s) :-
    */
 
   // Auxiliary predicates, both for optimization and used elsewhere
-  .decl ConnectPossible(prevState: State, c: ClientId, s: ServerId, action: Action)
-  ConnectPossible(prevState, c, s, action) :-
+  .decl ConnectPossible(prevState: State, action: Action, c: ClientId, s: ServerId)
+  ConnectPossible(prevState, action, c, s) :-
     Locked(prevState, s),
     DecomposeAction(action, "connect", c, s).
 
   .decl ConnectPossibleAction(prevState: State, action: Action)
   ConnectPossibleAction(prevState, action) :-
-    ConnectPossible(prevState, _, _, action).
+    ConnectPossible(prevState, action, _, _).
   
   // What happens to Held, upon a connect
   Held_Prime(prevState, action, c2, s2) :-
@@ -215,11 +221,11 @@ DecomposeAction(a, k, c, s) :-
     Held(prevState, c2, s2).
 
   Held_Prime(prevState, action, c, s) :-
-    ConnectPossible(prevState, c, s, action).
+    ConnectPossible(prevState, action, c, s).
 
   // Locked, upon a connect
   Locked_Prime(prevState, action, s2) :-
-    ConnectPossible(prevState, _, s, action),
+    ConnectPossible(prevState, action, _, s),
     Locked(prevState, s2),
     NotSameServer(s, s2).
 
@@ -249,7 +255,6 @@ DecomposeAction(a, k, c, s) :-
   Locked_Prime(prevState, action, s) :-
     DisconnectPossible(prevState, _, s, action).
 
-  .output IsState
 } // end of Transition component
 
 
@@ -276,17 +281,9 @@ T1.Locked(nil, s) :-
  */ 
 
 #define CopyRelations(tNew, tOld) \
-  tNew.Held(state, client, server) :- tOld.Held(state, client, server). \
-  tNew.Locked(state, server) :- tOld.Locked(state, server). \
   tNew.Held(state, client, server) :- tOld.TotalStateFinalized(state, prevState, action), tOld.Held_Prime(prevState, action, client, server). \
-  tNew.Locked(state, server) :- tOld.TotalStateFinalized(state, prevState, action),  tOld.Locked_Prime(prevState, action, server).
-
-  // tNew.Held_Prime(state, action, client, server) :- tOld.Held_Prime(state, action, client, server). \
-  // tNew.Held_Prime_Index(state, action, csi) :- tOld.Held_Prime_Index(state, action, csi). \
-  // tNew.Locked_Prime(state, action, server) :- tOld.Locked_Prime(state, action, server). \
-  // tNew.Locked_Prime_Index(state, action, si) :- tOld.Locked_Prime_Index(state, action, si). \
-  // tNew.HeldStateUpTo(prevState, action, clientServerIndex, partialState) :- tOld.HeldStateUpTo(prevState, action, clientServerIndex, partialState). \
-  // tNew.LockedStateUpTo(prevState, action, si, partialState) :- tOld.LockedStateUpTo(prevState, action, si, partialState). \
+  tNew.Locked(state, server) :- tOld.TotalStateFinalized(state, prevState, action),  tOld.Locked_Prime(prevState, action, server). \
+  tNew.ExaminedState(state) :- tOld.ExaminedState(state).
 
 CopyRelations(T2, T1)
 CopyRelations(T3, T2)
@@ -296,11 +293,40 @@ CopyRelations(T6, T5)
 CopyRelations(T7, T6)
 CopyRelations(TFinal, T7)
 
+.decl TotalHeld(state: State, c: ClientId, s: ServerId)
+TotalHeld(state, c, s) :-
+  T1.Held(state, c, s);
+  T2.Held(state, c, s);
+  T3.Held(state, c, s);
+  T4.Held(state, c, s);
+  T5.Held(state, c, s);
+  T6.Held(state, c, s);
+  T7.Held(state, c, s);
+  TFinal.Held(state, c, s).
+
+.decl TotalLocked(state: State, s: ServerId)
+TotalLocked(state, s) :-
+  T1.Locked(state, s);
+  T2.Locked(state, s);
+  T3.Locked(state, s);
+  T4.Locked(state, s);
+  T5.Locked(state, s);
+  T6.Locked(state, s);
+  T7.Locked(state, s);
+  TFinal.Locked(state, s).
+
+.decl TotalIsState(state: State)
+TotalIsState(state) :-
+  (TotalLocked(state, _);
+   TotalHeld(state, _, _)),
+  state != nil.
+
+// .output TotalIsState
 
 .decl Unsafe(state: State, c1: ClientId, c2: ClientId)
 Unsafe(state, c1, c2) :-
-  TFinal.Held(state, c1, s),
-  TFinal.Held(state, c2, s),
+  TotalHeld(state, c1, s),
+  TotalHeld(state, c2, s),
   c1 != c2.
 
 
@@ -327,7 +353,6 @@ IsClient("7").
 // .printsize Held
 
 
-.printsize TFinal.IsState
+.printsize TotalIsState
 
-// .output IsState
 .output Unsafe
