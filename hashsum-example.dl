@@ -3,6 +3,11 @@
 .decl hsum_result(x:number)
 .output sum_result()
 .output hsum_result()
+.type List = [x: number, y: List]
+.decl fold_result(x:List)
+.output fold_result
+
+.functor list_fold(a: List, elem: number):List stateful
 .functor hashsum(i1:number, i2:number):number stateful
 
 numbers(-1).
@@ -11,10 +16,18 @@ numbers(2).
 numbers(3).
 numbers(4).
 numbers(5).
+numbers(6).
+numbers(7).
+numbers(8).
+numbers(9).
+
+
 
 sum_result(x) :-
     x = sum a : { numbers(a), a > 0 }.
 
 hsum_result(x) :-
-    numbers(a),
     x = @@hashsum a : 0, { numbers(a), a > 0 }.
+
+fold_result(x) :-
+    x = @@list_fold a : nil, { numbers(a), a > 0 }.

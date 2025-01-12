@@ -8,12 +8,15 @@ WORD_SIZE=32
 # rudimentary
 all: libsoufflenum.so num_tests mappings_tests keccak256_tests
 
-libsoufflenum.so: $(KECCAK_OBJ) num256.o mappings.o keccak256.o lists.o smt-api.o hashsum_functor.o lub_functor.o
-	g++ -std=c++17 -shared -o libsoufflenum.so $(KECCAK_OBJ) smt-api.o num256.o mappings.o keccak256.o lists.o hashsum_functor.o lub_functor.o -march=native -lz3 -fopenmp -DRAM_DOMAIN_SIZE=$(WORD_SIZE)
+libsoufflenum.so: $(KECCAK_OBJ) num256.o mappings.o keccak256.o lists.o smt-api.o hashsum_functor.o lub_functor.o fold_functor.o
+	g++ -std=c++17 -shared -o libsoufflenum.so $(KECCAK_OBJ) smt-api.o num256.o mappings.o keccak256.o lists.o hashsum_functor.o lub_functor.o fold_functor.o -march=native -lz3 -fopenmp -DRAM_DOMAIN_SIZE=$(WORD_SIZE)
 	ln -sf libsoufflenum.so libfunctors.so
 
 hashsum_functor.o: hashsum_functor.cpp
 	g++ -std=c++17 hashsum_functor.cpp -lz3 -fopenmp -DRAM_DOMAIN_SIZE=$(WORD_SIZE) -c -fPIC -o hashsum_functor.o
+
+fold_functor.o: fold_functor.cpp
+	g++ -std=c++17 fold_functor.cpp -lz3 -fopenmp -DRAM_DOMAIN_SIZE=$(WORD_SIZE) -c -fPIC -o fold_functor.o
 
 lub_functor.o: lub_functor.cpp
 	g++ -std=c++17 lub_functor.cpp -lz3 -fopenmp -DRAM_DOMAIN_SIZE=$(WORD_SIZE) -c -fPIC -o lub_functor.o

@@ -1,6 +1,6 @@
 .type ServerId <: symbol
 .type ClientId <: symbol
-.functor hashsum(i1:number, i2:number):number stateful
+.functor list_fold(a: HeldOrLockedState, elem: number):HeldOrLockedState stateful
 
 /*
  * Ordering predicates (scaffolding)
@@ -97,9 +97,20 @@ ClientServerIndex(c, s, ci*ns + si) :-
   serverId : ServerId
 ]
 
-.type LockedState <: number
+// .type LockedState = [
+//   serverIndex: number,
+//   rest: LockedState
+// ]
 
-.type HeldState <: number
+// .type HeldState = [
+//   clientServerIndex: number,
+//   rest: HeldState
+// ]
+
+.type HeldOrLockedState = [
+  index: number,
+  rest: HeldOrLockedState
+]
 
 .type State = [
   locked: LockedState,
@@ -154,15 +165,15 @@ DecomposeAction(a, k, c, s) :-
     ConnectPossibleAction(prevState, action);
     DisconnectPossibleAction(prevState, action).
 
-  .decl HeldStateFinalized(prevState: State, action: Action, hstate: HeldState)
-  HeldStateFinalized(prevState, action, as(id, HeldState)) :-
+  .decl HeldStateFinalized(prevState: State, action: Action, hstate: HeldOrLockedState)
+  HeldStateFinalized(prevState, action, id_list) :-
     PossibleAction(prevState, action),
-    id = @@hashsum i: 0, {Held_Prime_Index(prevState, action, i)}.
+    id = @@list_fold i: 0, {Held_Prime_Index(prevState, action, i)}.
 
-  .decl LockedStateFinalized(prevState: State, action: Action, lstate: LockedState)
-  LockedStateFinalized(prevState, action, as(id, LockedState)) :-
+  .decl LockedStateFinalized(prevState: State, action: Action, lstate: HeldOrLockedState)
+  LockedStateFinalized(prevState, action, id_list) :-
     PossibleAction(prevState, action),
-    id = @@hashsum i: 0, {Locked_Prime_Index(prevState, action, i)}.
+    id = @@list_fold i: 0, {Locked_Prime_Index(prevState, action, i)}.
 
   .decl TotalStateFinalized(state: State, prevState: State, action: Action)
   TotalStateFinalized([ls, hs], prevState, action) :-
