@@ -170,6 +170,8 @@ DecomposeAction(a, k, c, s) :-
     HeldStateFinalized(prevState, action, hs),
     LockedStateFinalized(prevState, action, ls).
 
+  .output TotalStateFinalized
+
 
   /*
    * Optimization predicates capturing just the "not equals" relation
