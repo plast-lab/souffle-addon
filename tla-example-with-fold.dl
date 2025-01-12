@@ -160,18 +160,23 @@ DecomposeAction(a, k, c, s) :-
     PossibleAction(prevState, action),
     id_list = @@list_fold i: nil, {Held_Prime_Index(prevState, action, i)}.
 
+  HeldStateFinalized(prevState, action, nil) :-
+    PossibleAction(prevState, action),
+    !Held_Prime_Index(prevState, action, _).
+
   .decl LockedStateFinalized(prevState: State, action: Action, lstate: HeldOrLockedState)
   LockedStateFinalized(prevState, action, id_list) :-
     PossibleAction(prevState, action),
     id_list = @@list_fold i: nil, {Locked_Prime_Index(prevState, action, i)}.
 
+  LockedStateFinalized(prevState, action, nil) :-
+    PossibleAction(prevState, action),
+    !Locked_Prime_Index(prevState, action, _).
+
   .decl TotalStateFinalized(state: State, prevState: State, action: Action)
   TotalStateFinalized([ls, hs], prevState, action) :-
     HeldStateFinalized(prevState, action, hs),
     LockedStateFinalized(prevState, action, ls).
-
-  .output TotalStateFinalized
-
 
   /*
    * Optimization predicates capturing just the "not equals" relation

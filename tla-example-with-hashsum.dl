@@ -159,10 +159,18 @@ DecomposeAction(a, k, c, s) :-
     PossibleAction(prevState, action),
     id = @@hashsum i: 0, {Held_Prime_Index(prevState, action, i)}.
 
+  HeldStateFinalized(prevState, action, 0) :-
+    PossibleAction(prevState, action),
+    !Held_Prime_Index(prevState, action, _).
+
   .decl LockedStateFinalized(prevState: State, action: Action, lstate: LockedState)
   LockedStateFinalized(prevState, action, as(id, LockedState)) :-
     PossibleAction(prevState, action),
     id = @@hashsum i: 0, {Locked_Prime_Index(prevState, action, i)}.
+
+  LockedStateFinalized(prevState, action, 0) :-
+    PossibleAction(prevState, action),
+    !Locked_Prime_Index(prevState, action, _).
 
   .decl TotalStateFinalized(state: State, prevState: State, action: Action)
   TotalStateFinalized([ls, hs], prevState, action) :-

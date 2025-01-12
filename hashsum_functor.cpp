@@ -28,9 +28,6 @@ souffle::RamDomain hashsum(souffle::SymbolTable* symbolTable, souffle::RecordTab
 }
 
 souffle::RamDomain hash_function(const souffle::RamDomain &num) {
-    // unsigned long hash = 5381; // Initialize hash with a prime number
-    // hash += (num * num) ^ num;
-    // return hash;
     uint32_t x = static_cast<uint32_t>(num); // Ensure unsigned for consistent behavior
     x = ~x + (x << 15); // Invert and shift left
     x = x ^ (x >> 12);  // XOR with right-shifted value
