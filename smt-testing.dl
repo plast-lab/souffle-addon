@@ -298,6 +298,10 @@ TestCase(["EQ", ["ISZERO", ["0xa", nil, nil],nil] , ["0x0", nil, nil]]
   , ["sat", nil]).
 TestCase(["EQ", ["ISZERO", ["0x0", nil, nil],nil] , ["0x1", nil, nil]]
   , ["sat", nil]).
+TestCase(["EQ", ["ISNOTZERO", ["0xa", nil, nil],nil] , ["0x1", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["ISNOTZERO", ["0x0", nil, nil],nil] , ["0x0", nil, nil]]
+  , ["sat", nil]).
 TestCase(["EQ", ["AND", ["0xa", nil, nil],["0xa", nil, nil]] , ["0x0a", nil, nil]]
   , ["sat", nil]).
 TestCase(["EQ", ["AND", [SMTLIB_MINUS_ONE, nil, nil],["0x0", nil, nil]] , ["0x0", nil, nil]]

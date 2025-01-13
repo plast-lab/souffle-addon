@@ -1,0 +1,65 @@
+.type PrimitiveExpr = symbol
+
+.type Operator = symbol
+.type Base = PrimitiveExpr | Operator
+
+// unary, ternary, etc. expressions are represented via binary ones
+.type Expr = [
+                 base: Base,
+                 left: Expr,
+                 right: Expr
+             ]
+
+.type LetExpr = [var: PrimitiveExpr, expr: Expr]
+.type LetExprList = [head: LetExpr, rest: LetExprList]
+
+
+#define XV ["x", nil, nil]
+#define YV ["y", nil, nil]
+#define ZV ["z", nil, nil]
+
+#define CONST ["0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", nil, nil]
+
+.functor smt_response_simple(text: symbol):symbol
+.functor smt_response_with_model(text: symbol): SmtResult stateful
+
+.functor print_to_smt_style(x : Expr, boundVarsList : BoundVarsListType, let_expr_list: LetExprList) : symbol stateful
+
+
+.type SmtResult = [result : symbol,  model : Model ]
+
+.type ModelEntry = [variable : symbol, value : symbol] // changed number->symbol on  value
+                                                      // to support (SMT)-hexadecimals
+.type Model = [entry : ModelEntry, rest : Model]
+
+.type BoundVarsListType = [variable : symbol, rest : BoundVarsListType]
+
+
+.decl Queries(x: Expr)
+Queries(x) :-
+    x = ["EQ", ["0x0", nil, nil], ["AND", ["0x1", nil, nil], ["0x2", nil, nil]]].
+Queries(x) :-
+    x = ["EQ", ["0x1", nil, nil], ["LAND", ["0x1", nil, nil], ["0x2", nil, nil]]].
+Queries(x) :-
+    x = ["EQ", ["0x0", nil, nil], ["AND", ["0x7", nil, nil], ["0x0", nil, nil]]].
+Queries(x) :-
+    x = ["EQ", ["0x0", nil, nil], ["LAND", ["0x7", nil, nil], ["0x0", nil, nil]]].
+Queries(x) :-
+    x = ["EQ", ["0x1", nil, nil], ["LOR", ["0x7", nil, nil], ["0x0", nil, nil]]].
+Queries(x) :-
+    x = ["EQ", ["0x1", nil, nil], ["LOR", ["0x0", nil, nil], ["0x2", nil, nil]]].
+Queries(x) :-
+    x = ["EQ", ["0x0", nil, nil], ["LOR", ["0x0", nil, nil], ["0x0", nil, nil]]].
+Queries(x) :-
+    x = ["EQ", ["0x0", nil, nil], ["LNOT", ["0x2", nil, nil], nil]].
+Queries(x) :-
+    x = ["EQ", ["0x1", nil, nil], ["LNOT", ["0x0", nil, nil], nil]].
+
+.decl FastTestQueries(x: Expr, result: SmtResult, smtlib: symbol)
+FastTestQueries(x, result, smtlib) :-
+  Queries(x),
+  smtlib = @print_to_smt_style(x, y, nil),
+  y = ["bound", nil], // needs to be non-nil
+  result = @smt_response_with_model(smtlib).
+
+.output FastTestQueries

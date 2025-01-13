@@ -80,8 +80,7 @@ const bool smt_debug = std::getenv("SMT_DEBUG") != nullptr;
 bool isPredefinedFunction(string op) {
   if (op == "isZero" || op == "isNotZero" || op == "byte" || op == "signextend" || op == "my_exp" || op == "my_bvshl" || op == "my_bvashr" ||
       op == "my_bvlshr" || op == "my_eq" || op == "my_not_eq" || op == "my_bvgt" || op == "my_bvsgt" || op == "my_bvlt" || op == "my_bvslt" ||
-
-      op == "my_bvge" || op == "my_bvle" ||
+      op == "my_land" || op == "my_lor" || op == "my_lnot" || op == "my_bvge" || op == "my_bvle" ||
 
       op == "sha3" || op == "sha3_1arg" || op == "sha3_2arg") {
     return false;
@@ -108,7 +107,7 @@ string inline_user_defined_function(string op, string lexpr, string rexpr) {
            " ))"
            " )"
            " (bvlshr (bvand " +
-          //  rexpr + " (bvlshr " + MASK_M_S_BYTE + " " + "move)) (bvmul " + SMTLIB_8 + " " + "(bvsub " + NUM_OF_BYTES_IN_BV + " " + lexpr + ")) )" + ")";
+           //  rexpr + " (bvlshr " + MASK_M_S_BYTE + " " + "move)) (bvmul " + SMTLIB_8 + " " + "(bvsub " + NUM_OF_BYTES_IN_BV + " " + lexpr + ")) )" + ")";
            rexpr + " (bvlshr " + MASK_M_S_BYTE + " " + "move)) (bvmul " + SMTLIB_8 + " " + "(bvsub " + NUM_OF_BYTES_IN_BV + " " + lexpr + ")) )" + ")";
   }
   if (op == "signextend") {
@@ -145,6 +144,18 @@ string inline_user_defined_function(string op, string lexpr, string rexpr) {
            ")"
            " " +
            SMTLIB_TRUE_VAL " " + SMTLIB_FALSE_VAL ")";
+  }
+
+  if (op == "my_land") {
+    return "(ite (= " + lexpr + " " + SMTLIB_FALSE_VAL + ") " + SMTLIB_FALSE_VAL + " (ite (= " + rexpr + " " + SMTLIB_FALSE_VAL + " )" + SMTLIB_FALSE_VAL +
+           " " + SMTLIB_TRUE_VAL + "))";
+  }
+  if (op == "my_lor") {
+    return "(ite (= " + lexpr + " " + SMTLIB_FALSE_VAL + ") " + " (ite (= " + rexpr + " " + SMTLIB_FALSE_VAL + " )" + SMTLIB_FALSE_VAL + " " +
+           SMTLIB_TRUE_VAL ")" + SMTLIB_TRUE_VAL + ")";
+  }
+  if (op == "my_lnot") {
+    return "(ite (= " + lexpr + " " + SMTLIB_FALSE_VAL + ") " + SMTLIB_TRUE_VAL + " " + SMTLIB_FALSE_VAL + ")";
   }
 
   if (op == "my_bvge") {
@@ -355,7 +366,6 @@ void populate_operator_mapping() {
   operator_mapping.insert(make_pair("UNOP_NEG", "bvneg"));
   operator_mapping.insert(make_pair("UNOP_ISZERO", "isZero"));
 
-
   operator_mapping.insert(make_pair("ADD", "bvadd"));
   operator_mapping.insert(make_pair("SUB", "bvsub"));
   operator_mapping.insert(make_pair("MUL", "bvmul"));
@@ -385,6 +395,9 @@ void populate_operator_mapping() {
   operator_mapping.insert(make_pair("SAR", "my_bvashr"));
   operator_mapping.insert(make_pair("NOT", "bvnot"));
 
+  operator_mapping.insert(make_pair("LAND", "my_land"));
+  operator_mapping.insert(make_pair("LOR", "my_lor"));
+  operator_mapping.insert(make_pair("LNOT", "my_lnot"));
   /**
    *  TODO :
    * implement sha3 in smtlib ?
@@ -426,7 +439,6 @@ string make_constraint_for_bounded_var(string var) {
   string value = get_random_special_value();
   return "(assert (= " + var + " " + value + "))\n";
 }
-
 
 void traverse_model(solver smt_solver) {
   z3::model model = smt_solver.get_model();
@@ -759,8 +771,7 @@ souffle::RamDomain print_to_smt_style(souffle::SymbolTable *symbol_table, souffl
       declarations + let_declarations + "( assert " + let_exprs + " (= " + SMTLIB_TRUE_VAL + " " + out + ") " + repeat_symbol_n_times(")", let_length) + " )\n";
   string result_with_constraints = result;
 
-  pair<std::string, set<std::string>> key = make_pair(
-      result_with_constraints, global_set_for_bounded_vars);
+  pair<std::string, set<std::string>> key = make_pair(result_with_constraints, global_set_for_bounded_vars);
 
   if (cache_print_to_smt_style.find(key) != cache_print_to_smt_style.end()) {
     // we have already made this computation once!
