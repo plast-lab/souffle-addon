@@ -204,6 +204,15 @@ DecomposeAction(a, k, c, s) :-
     DisconnectPossible(prevState, _, s, action),
     ServerIndex(s, si).
 
+  .decl Unsound(state: State)
+  Unsound(state) :-
+    TotalStateFinalized(state, prevState, action),
+    TotalStateFinalized(state, prevState2, action2),
+    Held_Prime(prevState, action, i),
+    !Held_Prime(prevState2, action2, i).
+
+  .printsize Unsound    
+  .output Unsound
 } // end of Transition component
 
 

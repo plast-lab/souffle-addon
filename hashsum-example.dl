@@ -10,7 +10,7 @@
 .functor list_fold(a: List, elem: number):List stateful
 .functor hashsum(i1:number, i2:number):number stateful
 
-numbers(x) :- x = range(-100, 100).
+numbers(x) :- x = range(-10, 10).
 
 sum_result(x) :-
     x = sum a : { numbers(a), a > 0 }.
