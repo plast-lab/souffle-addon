@@ -223,6 +223,12 @@ DecomposeAction(a, k, c, s) :-
 .init T5 = Transition
 .init T6 = Transition
 .init T7 = Transition
+.init T8 = Transition
+.init T9 = Transition
+.init T10 = Transition
+.init T11 = Transition
+.init T12 = Transition
+.init T13 = Transition
 .init TFinal = Transition
 
 /*
@@ -250,7 +256,13 @@ CopyRelations(T4, T3)
 CopyRelations(T5, T4)
 CopyRelations(T6, T5)
 CopyRelations(T7, T6)
-CopyRelations(TFinal, T7)
+CopyRelations(T8, T7)
+CopyRelations(T9, T8)
+CopyRelations(T10, T9)
+CopyRelations(T11, T10)
+CopyRelations(T12, T11)
+CopyRelations(T13, T12)
+CopyRelations(TFinal, T13)
 
 .decl TotalHeld(state: State, clientServerIndex: number)
 TotalHeld(state, csi) :-
@@ -261,6 +273,12 @@ TotalHeld(state, csi) :-
   T5.Held(state, csi);
   T6.Held(state, csi);
   T7.Held(state, csi);
+  T8.Held(state, csi);
+  T9.Held(state, csi);
+  T10.Held(state, csi);
+  T11.Held(state, csi);
+  T12.Held(state, csi);
+  T13.Held(state, csi);
   TFinal.Held(state, csi).
 
 .decl TotalLocked(state: State, serverIndex: number)
@@ -272,6 +290,12 @@ TotalLocked(state, si) :-
   T5.Locked(state, si);
   T6.Locked(state, si);
   T7.Locked(state, si);
+  T8.Locked(state, si);
+  T9.Locked(state, si);
+  T10.Locked(state, si);
+  T11.Locked(state, si);
+  T12.Locked(state, si);
+  T13.Locked(state, si);
   TFinal.Locked(state, si).
 
 .decl TotalIsState(state: State)
@@ -302,6 +326,9 @@ IsServer("d").
 IsServer("e").
 IsServer("f").
 IsServer("g").
+IsServer("h").
+IsServer("i").
+
 IsClient("1").
 IsClient("2").
 IsClient("3").
@@ -309,6 +336,8 @@ IsClient("4").
 IsClient("5").
 IsClient("6").
 IsClient("7").
+IsClient("8").
+IsClient("9").
 
 // .printsize Locked
 // .printsize Held

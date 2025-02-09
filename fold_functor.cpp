@@ -22,14 +22,14 @@ extern "C" {
         assert(symbolTable && "NULL symbol table");
         assert(recordTable && "NULL record table");
 
-        if (list == 0) {
-            souffle::RamDomain new_list[2] = {elem, 0};
-            return recordTable->pack(new_list, 2);
-        }
-        else {
+        // if (list == 0) {
+        //     souffle::RamDomain new_list[2] = {elem, 0};
+        //     return recordTable->pack(new_list, 2);
+        // }
+        // else {
             souffle::RamDomain new_list[2] = {elem, list};
             return recordTable->pack(new_list, 2);
-        }
+        //}
     }
 
     // souffle::RamDomain list_fold(
