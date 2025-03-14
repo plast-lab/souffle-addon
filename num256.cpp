@@ -44,6 +44,14 @@ extern "C" {
     return out;
   }
 
+  const char* hex_to_decimal_str(const char *x) {
+    thread_local static char out[82] = {""};
+    uint256_t my_x(x);
+    string strNum = my_x.str();
+    strcpy(out, strNum.c_str());
+    return out;
+  }
+
   int32_t max2(int32_t x, int32_t y) {
     return x < y ? y : x;
   }

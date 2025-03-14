@@ -101,13 +101,21 @@ BOOST_AUTO_TEST_CASE(test_shl) {
 
 BOOST_AUTO_TEST_CASE(test_conv) {
 	BOOST_TEST(
-                   number_to_hex(uint32_t(0xFFFF))
-                   ==
-                   "0xffff");
+				number_to_hex(uint32_t(0xFFFF))
+				==
+				"0xffff");
 	BOOST_TEST(
-                   hex_to_number("0xeff23")
-                   ==
-                   0xeff23);
+				hex_to_number("0xeff23")
+				==
+				0xeff23);
+	BOOST_TEST(
+				hex_to_decimal_str("0xf746e86e1cdf3e5ba50770a928e6581e367105410dcc616b578d45b24524d5b4")
+				==
+				"111846557068388454879862721956824107300155881072629453246629892412033359730100");
+	BOOST_TEST(
+				hex_to_decimal_str("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+				==
+				"115792089237316195423570985008687907853269984665640564039457584007913129639935");
 }
 
 BOOST_AUTO_TEST_CASE(test_shr) {
