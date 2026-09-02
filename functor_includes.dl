@@ -13,7 +13,7 @@
 .functor in_set(symbol,symbol):number
 .functor add_set(symbol,symbol):symbol
 .functor len_set(symbol):number
-
+.functor empty_set():symbol
 
 .functor add_256(symbol,symbol):symbol
 .functor sub_256(symbol,symbol):symbol

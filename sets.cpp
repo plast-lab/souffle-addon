@@ -1,6 +1,6 @@
 // set_functors.cpp
 //
-// Soufflé functors:
+// Soufflé functors for immutable, content-deduplicated string sets:
 //   .functor empty_set(): symbol
 //   .functor add_set(symbol, symbol): symbol
 //   .functor in_set(symbol, symbol): number
@@ -9,30 +9,36 @@
 //   .functor set_eq(symbol, symbol): number
 //   .functor union_set(symbol, symbol): symbol
 //
-// NOTE: verify the exact C ABI your installed Soufflé version expects for
-// symbol-typed functor params/returns (raw const char* vs. stateful/
-// SymbolTable-based) before linking this in — it has changed across
-// versions. Adjust signatures accordingly if needed.
+// Sets are immutable once created. A set handle is a symbol "S<id>" whose id
+// indexes an internal table. Because handles are fully determined by the id,
+// no symbol->id map is needed — the id is parsed back out of the symbol.
+//
 
 #include <vector>
 #include <unordered_set>
 #include <unordered_map>
 #include <string>
 #include <shared_mutex>
-#include <mutex>
 #include <cstdint>
+#include <cstdio>
 #include <sstream>
+#include <mutex>
 
 // ---------------------------------------------------------------------
 // Storage
+//
+// Invariant: entries in `table` are write-once. Once allocSet publishes an
+// entry, its contents never change. Therefore readers only ever race with the
+// *writer* (allocSet growing the containers), never with each other — which is
+// exactly what shared_mutex is for: many concurrent readers, one exclusive
+// writer.
 // ---------------------------------------------------------------------
 struct SetEntry {
     std::unordered_set<std::string> elems;
     uint64_t contentHash;
 };
 
-static std::vector<SetEntry> table;                          // internal id -> set
-static std::unordered_map<std::string, int32_t> symToId;     // "S42" -> 42
+static std::vector<SetEntry> table;                          // id -> set
 static std::unordered_map<uint64_t, int32_t> contentIntern;  // contentHash -> id (dedup)
 static std::shared_mutex mu;
 
@@ -43,32 +49,48 @@ static inline uint64_t hashStr(const std::string& s) {
     return h;
 }
 
-static inline uint64_t mixOrderIndependent(uint64_t acc, uint64_t elemHash) {
-    // commutative/associative mix so set content hash doesn't depend on insertion order
-    return acc ^ (elemHash + 0x9e3779b97f4a7c15ULL + (acc << 6) + (acc >> 2));
+// splitmix64 finalizer — spreads each element's bits before combining, so the
+// plain XOR below doesn't suffer from structured/linear element hashes.
+static inline uint64_t finalize(uint64_t h) {
+    h ^= h >> 30; h *= 0xbf58476d1ce4e5b9ULL;
+    h ^= h >> 27; h *= 0x94d049bb133111ebULL;
+    h ^= h >> 31;
+    return h;
 }
 
-static int32_t resolveId(const std::string& sym) {
-    std::shared_lock lk(mu);
-    auto it = symToId.find(sym);
-    return it == symToId.end() ? -1 : it->second;
+// Commutative AND associative: order of insertion cannot affect the result.
+static inline uint64_t mixOrderIndependent(uint64_t acc, uint64_t elemHash) {
+    return acc ^ finalize(elemHash);
+}
+
+// Parse "S<digits>" back to an id; -1 on any malformed input. No lock needed —
+// pure string work, touches no shared state.
+static int32_t parseId(const char* sym) {
+    if (!sym || sym[0] != 'S' || sym[1] == '\0') return -1;
+    int64_t v = 0;
+    for (const char* p = sym + 1; *p; ++p) {
+        if (*p < '0' || *p > '9') return -1;
+        v = v * 10 + (*p - '0');
+        if (v > INT32_MAX) return -1;
+    }
+    return (int32_t)v;
 }
 
 static std::string mintSymbol(int32_t id) {
     return "S" + std::to_string(id);
 }
 
-// allocate a fresh id for a given set body, deduping on exact content match
+// The sole writer. Dedups on exact content, else appends. Exclusive lock.
 static int32_t allocSet(std::unordered_set<std::string> elems, uint64_t contentHash) {
-    std::unique_lock lk(mu); // exclusive — mutates table/symToId/contentIntern
+    std::unique_lock lk(mu);
     auto it = contentIntern.find(contentHash);
     if (it != contentIntern.end() && table[it->second].elems == elems) {
-        return it->second;
+    // if (it != contentIntern.end()) {
+        return it->second; // identical set already exists (hash + full == check)
     }
     table.push_back({std::move(elems), contentHash});
     int32_t id = (int32_t)table.size() - 1;
-    contentIntern[contentHash] = id;
-    symToId[mintSymbol(id)] = id;
+    contentIntern[contentHash] = id; // last-writer-wins on hash collision; == above keeps it correct
     return id;
 }
 
@@ -78,71 +100,84 @@ static int32_t allocSet(std::unordered_set<std::string> elems, uint64_t contentH
 extern "C" {
 
 // empty_set() : symbol
+// Magic static: exactly-once, thread-safe init with no explicit locking, and
+// the resulting symbol string is computed once and reused forever.
 const char* empty_set() {
-    // Magic static: thread-safe, exactly-once initialization, no explicit locking,
-    // and the string is computed once and reused for the lifetime of the process.
     static const std::string sym = [] {
-        int32_t id = allocSet(std::unordered_set<std::string>{}, 0);
-        return mintSymbol(id);
+        return mintSymbol(allocSet(std::unordered_set<std::string>{}, 0));
     }();
     return sym.c_str();
 }
 
 // add_set(symbol set, symbol elem) : symbol
 const char* add_set(const char* setSym, const char* elem) {
-    int32_t id = resolveId(setSym);
+    int32_t id = parseId(setSym);
+    std::string e(elem);
 
     std::unordered_set<std::string> copy;
     uint64_t h = 0;
-    if (id != -1) {
+    bool alreadyPresent = false;
+
+    // Single shared lock covers both the membership check and the copy, so we
+    // only copy when the element is genuinely new.
+    {
         std::shared_lock lk(mu);
-        copy = table[id].elems;      // O(n) copy
-        h = table[id].contentHash;
+        if (id >= 0 && id < (int32_t)table.size()) {
+            const SetEntry& entry = table[id];
+            if (entry.elems.count(e)) {
+                alreadyPresent = true;
+            } else {
+                copy = entry.elems;      // O(n) copy, only on the new-element path
+                h = entry.contentHash;
+            }
+        }
     }
 
-    std::string e(elem);
-    if (copy.insert(e).second) {     // only changes hash if actually new
-        h = mixOrderIndependent(h, hashStr(e));
-    }
-
-    int32_t newId = allocSet(std::move(copy), h);
-
+    // Adding an element already in the set yields the same set → return the
+    // same handle, no allocation, no copy.
     static thread_local std::string buf;
-    buf = mintSymbol(newId);
+    if (alreadyPresent) { buf = setSym; return buf.c_str(); }
+
+    copy.insert(e);
+    h = mixOrderIndependent(h, hashStr(e));
+    buf = mintSymbol(allocSet(std::move(copy), h));
     return buf.c_str();
 }
 
-// in_set(symbol set, symbol elem) : number
+// in_set(symbol set, symbol elem) : number   -- O(1) avg, shared lock
 int32_t in_set(const char* setSym, const char* elem) {
-    int32_t id = resolveId(setSym);
-    if (id == -1) return 0;
+    int32_t id = parseId(setSym);
+    if (id < 0) return 0;
     std::shared_lock lk(mu);
+    if (id >= (int32_t)table.size()) return 0;
     return table[id].elems.count(elem) ? 1 : 0;
 }
 
-// len_set(symbol set) : number
+// len_set(symbol set) : number   -- O(1), shared lock
 int32_t len_set(const char* setSym) {
-    int32_t id = resolveId(setSym);
-    if (id == -1) return 0;
+    int32_t id = parseId(setSym);
+    if (id < 0) return 0;
     std::shared_lock lk(mu);
+    if (id >= (int32_t)table.size()) return 0;
     return (int32_t)table[id].elems.size();
 }
 
 // set_to_string(symbol set) : symbol   -- debugging / witness output
 const char* set_to_string(const char* setSym) {
-    int32_t id = resolveId(setSym);
+    int32_t id = parseId(setSym);
     static thread_local std::string buf;
-    if (id == -1) { buf = "{}"; return buf.c_str(); }
 
     std::ostringstream oss;
     oss << "{";
     {
         std::shared_lock lk(mu);
-        bool first = true;
-        for (const auto& e : table[id].elems) {
-            if (!first) oss << ",";
-            oss << e;
-            first = false;
+        if (id >= 0 && id < (int32_t)table.size()) {
+            bool first = true;
+            for (const auto& e : table[id].elems) {
+                if (!first) oss << ",";
+                oss << e;
+                first = false;
+            }
         }
     }
     oss << "}";
@@ -150,17 +185,24 @@ const char* set_to_string(const char* setSym) {
     return buf.c_str();
 }
 
-// set_eq(symbol a, symbol b) : number   -- O(1): same content-id iff same set
+// set_eq(symbol a, symbol b) : number   -- O(1)
+// Relies on content dedup: identical sets always share one id, so id equality
+// is set equality. (If you ever disable dedup, replace this with a content
+// comparison.)
 int32_t set_eq(const char* aSym, const char* bSym) {
-    int32_t a = resolveId(aSym);
-    int32_t b = resolveId(bSym);
-    return (a == b && a != -1) ? 1 : 0;
+    int32_t a = parseId(aSym);
+    int32_t b = parseId(bSym);
+    if (a < 0 || b < 0) return 0;
+    std::shared_lock lk(mu);
+    int32_t n = (int32_t)table.size();
+    if (a >= n || b >= n) return 0;
+    return (a == b) ? 1 : 0;
 }
 
 // union_set(symbol a, symbol b) : symbol
 const char* union_set(const char* aSym, const char* bSym) {
-    int32_t aId = resolveId(aSym);
-    int32_t bId = resolveId(bSym);
+    int32_t aId = parseId(aSym);
+    int32_t bId = parseId(bSym);
 
     std::unordered_set<std::string> merged;
     {
