@@ -39,7 +39,8 @@ struct SetEntry {
 };
 
 static std::vector<SetEntry> table;                          // id -> set
-static std::unordered_map<uint64_t, int32_t> contentIntern;  // contentHash -> id (dedup)
+// hash -> every id that hashed here (usually exactly one)
+static std::unordered_map<uint64_t, std::vector<int32_t>> contentIntern;
 static std::shared_mutex mu;
 
 static inline uint64_t hashStr(const std::string& s) {
@@ -83,14 +84,13 @@ static std::string mintSymbol(int32_t id) {
 // The sole writer. Dedups on exact content, else appends. Exclusive lock.
 static int32_t allocSet(std::unordered_set<std::string> elems, uint64_t contentHash) {
     std::unique_lock lk(mu);
-    auto it = contentIntern.find(contentHash);
-    if (it != contentIntern.end() && table[it->second].elems == elems) {
-    // if (it != contentIntern.end()) {
-        return it->second; // identical set already exists (hash + full == check)
+    auto& bucket = contentIntern[contentHash]; // creates empty vector on first sight
+    for (int32_t existing : bucket) {
+        if (table[existing].elems == elems) return existing; // exact match → share id
     }
     table.push_back({std::move(elems), contentHash});
     int32_t id = (int32_t)table.size() - 1;
-    contentIntern[contentHash] = id; // last-writer-wins on hash collision; == above keeps it correct
+    bucket.push_back(id); // add alongside any colliders, don't overwrite
     return id;
 }
 
