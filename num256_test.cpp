@@ -275,12 +275,12 @@ BOOST_AUTO_TEST_CASE(test_not) {
 
 BOOST_AUTO_TEST_CASE(test_add_set) {
 	BOOST_TEST(
-                   add_set("boo|zoo", "too")
+                   add_set_legacy("boo|zoo", "too")
                    ==
                    "boo|too|zoo");
 
 	BOOST_TEST(
-                   add_set("", "")
+                   add_set_legacy("", "")
                    ==
                    "");
 }
@@ -288,24 +288,24 @@ BOOST_AUTO_TEST_CASE(test_add_set) {
 
 BOOST_AUTO_TEST_CASE(test_in_set) {
 	BOOST_TEST(
-                   in_set("boo|zoo", "too")
+                   in_set_legacy("boo|zoo", "too")
                    ==
                    0);
 
 	BOOST_TEST(
-                   in_set("boo|zoo", "boo")
+                   in_set_legacy("boo|zoo", "boo")
                    ==
                    1);
 }
 
 BOOST_AUTO_TEST_CASE(test_len_set) {
 	BOOST_TEST(
-                   len_set("boo|zoo")
+                   len_set_legacy("boo|zoo")
                    ==
                    2);
 
 	BOOST_TEST(
-                   len_set("")
+                   len_set_legacy("")
                    ==
                    0);
 }
