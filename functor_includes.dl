@@ -10,10 +10,13 @@
 .functor max2(number, number):number
 .functor min2(number, number):number
 
+.functor empty_set():symbol
 .functor in_set(symbol,symbol):number
 .functor add_set(symbol,symbol):symbol
 .functor len_set(symbol):number
-.functor empty_set():symbol
+.functor set_to_string(symbol): symbol
+.functor set_eq(symbol, symbol): number
+.functor union_set(symbol, symbol): symbol
 
 .functor add_256(symbol,symbol):symbol
 .functor sub_256(symbol,symbol):symbol

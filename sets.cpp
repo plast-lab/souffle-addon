@@ -1,13 +1,3 @@
-// set_functors.cpp
-//
-// Soufflé functors for immutable, content-deduplicated string sets:
-//   .functor empty_set(): symbol
-//   .functor add_set(symbol, symbol): symbol
-//   .functor in_set(symbol, symbol): number
-//   .functor len_set(symbol): number
-//   .functor set_to_string(symbol): symbol
-//   .functor set_eq(symbol, symbol): number
-//   .functor union_set(symbol, symbol): symbol
 //
 // Sets are immutable once created. A set handle is a symbol "S<id>" whose id
 // indexes an internal table. Because handles are fully determined by the id,
