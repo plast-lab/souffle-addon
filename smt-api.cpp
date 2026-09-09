@@ -68,10 +68,21 @@ using namespace z3;
 #endif
 
 extern "C" {
-z3::context ctx;
-z3::solver smt_solver(ctx);
+// Souffle may evaluate functors on several OpenMP worker threads (`souffle -j<N>`).
+// A z3::context is NOT thread-safe, so a single shared context/solver crashes
+// (Z3 assertion violation + segfault) under parallel evaluation. Giving every
+// thread its own context/solver keeps parallel solving while isolating Z3 state.
+//
+// `encoded_variable_names` is the hand-off from print_to_smt_style() (writer) to
+// smt_response_with_model() (reader). Making it thread_local is safe ONLY because
+// the .dl always composes them within one rule body as
+//   @smt_response_with_model(@print_to_smt_style(...))
+// so both run on the same thread. Materialising the SMT string into a relation
+// and consuming it from a separate rule/stratum would break this.
+thread_local z3::context ctx;
+thread_local z3::solver smt_solver(ctx);
 
-std::map<string, string> encoded_variable_names;
+thread_local std::map<string, string> encoded_variable_names;
 
 // Enable printing SMT queries to stdout when
 // SMT_DEBUG env variable is set
@@ -290,7 +301,9 @@ std::list<souffle::RamDomain> get_list_of_model_entries(solver smt_solver, souff
 }
 
 // hash<string> hasher;
-unordered_map<string, souffle::RamDomain> cache_smt_response_with_model = {};
+// thread_local: caches are now per-thread (see note at the top of the extern "C"
+// block). Lower hit rate than a shared cache, but correct without locking.
+thread_local unordered_map<string, souffle::RamDomain> cache_smt_response_with_model = {};
 souffle::RamDomain smt_response_with_model(souffle::SymbolTable *symbol_table, souffle::RecordTable *record_table, souffle::RamDomain text) {
   const std::string &query = symbol_table->decode(text);
 
@@ -354,11 +367,15 @@ souffle::RamDomain smt_response_with_model(souffle::SymbolTable *symbol_table, s
   return result;
 }
 
-std::set<string> global_set_for_vars = {};
-std::set<string> global_set_for_bounded_vars = {};
-std::set<string> global_set_let_defines = {};
-std::set<string> global_set_let_uses = {};
-std::map<string, string> operator_mapping = {};
+// thread_local: these accumulate state during a single print_to_smt_style() call
+// and MUST NOT be shared between threads (they are clear()ed and rebuilt on every
+// call). operator_mapping is effectively read-only after the first
+// populate_operator_mapping() on each thread.
+thread_local std::set<string> global_set_for_vars = {};
+thread_local std::set<string> global_set_for_bounded_vars = {};
+thread_local std::set<string> global_set_let_defines = {};
+thread_local std::set<string> global_set_let_uses = {};
+thread_local std::map<string, string> operator_mapping = {};
 
 void populate_operator_mapping() {
   operator_mapping.insert(make_pair("NOT_EQ", "my_not_eq"));
@@ -708,7 +725,8 @@ string find_best_logic(string smtlib_query) {
   return "(set-logic ALL)\n";
 }
 
-std::map<pair<std::string, set<std::string>>, souffle::RamDomain> cache_print_to_smt_style;
+// thread_local: per-thread cache (see note at the top of the extern "C" block).
+thread_local std::map<pair<std::string, set<std::string>>, souffle::RamDomain> cache_print_to_smt_style;
 
 /**
  * Implement smt-lib mapping!
