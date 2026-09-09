@@ -619,7 +619,7 @@ void add_bounded_variables(souffle::SymbolTable *symbol_table, souffle::RecordTa
 }
 
 bool is_op_string(string v) {
-  map<string, string>::iterator it = operator_mapping.find(v);
+  std::map<string, string>::iterator it = operator_mapping.find(v);
   if (it != operator_mapping.end()) {
     return true;
   }
