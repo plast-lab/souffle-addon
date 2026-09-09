@@ -277,6 +277,21 @@ TestCase(["EQ", ["0x0", nil, nil], ["LE", ["0xa", nil, nil], ["0x9", nil, nil]]]
 TestCase(["EQ", ["0x1", nil, nil], ["NOT_EQ", ["0xa", nil, nil], ["0x9", nil, nil]]], ["sat", nil]).
 TestCase(["EQ", ["0x0", nil, nil], ["NOT_EQ", ["0xa", nil, nil], ["0xa", nil, nil]]], ["sat", nil]).
 
+// Alternative opcode spellings emitted by some analyses:
+// binop_mul == MUL, UNOP_NEG == bvneg, UNOP_ISZERO == ISZERO
+TestCase(["EQ", ["binop_mul", ["0x3", nil, nil], ["0x4", nil, nil]], ["0xc", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["binop_mul", ["0x2", nil, nil], [SMTLIB_MINUS_ONE, nil, nil]], [SMTLIB_MINUS_TWO, nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["UNOP_NEG", ["0x1", nil, nil], nil], [SMTLIB_MINUS_ONE, nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["UNOP_NEG", ["0x0", nil, nil], nil], ["0x0", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["UNOP_ISZERO", ["0x0", nil, nil], nil], ["0x1", nil, nil]]
+  , ["sat", nil]).
+TestCase(["EQ", ["UNOP_ISZERO", ["0xa", nil, nil], nil], ["0x0", nil, nil]]
+  , ["sat", nil]).
+
 
 TestCase(["EQ", ["0xf", nil, nil],["0xffff", nil, nil]]
   , ["unsat", nil]).
