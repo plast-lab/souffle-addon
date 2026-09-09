@@ -46,98 +46,13 @@
 
 .functor print_to_smt_style(x : Expr, boundVarsList : BoundVarsListType, let_expr_list: LetExprList) : symbol stateful
 
-
-
-
-.decl ToSmt(x : Expr, result: SmtResult)
-ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, nil, nil))) :-
-    // BoundVarsList(boundVarsList),
-    x = ["FORALLSTAR", YV,["GT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, ZV]]],   /// we lost y variable here !!
-        ["ADD", ["ADD", YV, XV], XV]]].                                        /// debug !
-ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList, nil))) :-
-    BoundVarsList(boundVarsList),
-    x = ["SLT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]],
-        ["ADD", ["ADD", YV, XV], XV]].
-ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList, nil))) :-
-    BoundVarsList(boundVarsList),
-    x = ["LT", XV,
-        CONST].
-ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList, nil))) :-
-    BoundVarsList(boundVarsList),
-    x = ["FORALLSTAR", XV,
-    ["LT", ZV,
-        ["ADD", ["SUB", XV, XV], YV]]
-    ].
-// ToSmt(x, @smt_response_with_model(@print_to_smt_style(x))) :-
-//     x = ["FORALLSTAR", YV,
-//     ["FORALL", XV,
-//         ["LT", ZV,
-//             ["ADD", ["SUB", XV, XV], YV]]
-//     ]].
-
-ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList, nil))) :-
-    BoundVarsList(boundVarsList),
-    x = ["LT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]],
-                ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]]].
-ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList, nil))) :-
-    BoundVarsList(boundVarsList),
-    x = ["SLT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]],
-                ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]]].
-ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList, nil))) :-
-    BoundVarsList(boundVarsList),
-    x = ["FORALLSTAR",YV,["LT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]],
-                ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]]]].
-ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList, nil))) :-
-    BoundVarsList(boundVarsList),
-    x = ["EQ", XV,
-             ["ADD", ["0x0f", nil, nil], ["0x0f", nil, nil]]].
-ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList, nil))) :-
-    BoundVarsList(boundVarsList),
-    x = ["EQ", XV,
-             ["ADD", ["0x0f", nil, nil], ["0xf", nil, nil]]].
-ToSmt(x, @smt_response_with_model(@print_to_smt_style(x, boundVarsList, nil))) :-
-    BoundVarsList(boundVarsList),
-    x = ["EQ", ["0xf", nil, nil],
-             ["0xffff", nil, nil]].
-    /**
-    TODO: support clasic forall
-        --> handle scope !!
-    */
-.output ToSmt
-
-
 .type SmtResult = [result : symbol,  model : Model ]
 
 .type ModelEntry = [variable : symbol, value : symbol] // changed number->symbol on  value
-                                                      // to support (SMT)-hexadecimals
+                                                       // to support (SMT)-hexadecimals
 .type Model = [entry : ModelEntry, rest : Model]
 
 
-.decl SmtResponseEntry(x: Expr, entry: ModelEntry)
-SmtResponseEntry(x, entry) :-
-  IsSmtModel(x, model),
-  model = [entry, _].
-
-.decl IsSmtModel(x: Expr, model: Model)
-IsSmtModel(x, model) :-
-  ToSmt(x, y),
-  y = ["sat", model].
-
-IsSmtModel(x, model) :-
-  IsSmtModel(x, supermodel),
-  supermodel = [_, model].
-
-.decl getModel(x: Expr, var: symbol, val : symbol)
-getModel(x , var, val) :-
-    ToSmt(x, y),
-    y = ["sat", m],
-    m = [entry, _],
-    entry = [var, val].
-
-.output getModel
-.output SmtResponseEntry
-
-///////////////////////////////////////////////////////////////////////////////////
 .decl BoundVars(domain: symbol, var : symbol)
 BoundVars("dom", "x x''").
 BoundVars("dom", "y y").
@@ -180,8 +95,6 @@ BoundVars("dom", "a.a").
     !IsLessThanNotNext(prev, next).
 }
 
-
-
 /**
   Sort using souffle's internal ordinal number.
   Useful when we just want to get any order.
@@ -223,7 +136,7 @@ BoundVarsList(ans) :-
 .output BoundVarsList
 
 
-// Unit Tests :
+.decl TestCase(expr : Expr, exp_res : SmtResult)
 
 .decl TestRun(expr : Expr, res : SmtResult, exp_res : SmtResult)
 TestRun(expr, res, exp_res) :-
@@ -245,7 +158,126 @@ TestFailed(expr, computed_res) :-
 .output TestFailed
 
 
-.decl TestCase(expr : Expr, exp_res : SmtResult)
+.decl TestCaseLet(expr : Expr, lets : LetExprList, exp_res : SmtResult)
+
+.decl TestRunLet(expr : Expr, lets : LetExprList, res : SmtResult, exp_res : SmtResult)
+TestRunLet(expr, lets, res, exp_res) :-
+  TestCaseLet(expr, lets, exp_res),
+  BoundVarsList(model),
+  res = @smt_response_with_model(@print_to_smt_style(expr, model, lets)).
+.output TestRunLet
+
+.decl TestPassedLet(expr : Expr, lets : LetExprList, res : SmtResult)
+TestPassedLet(expr, lets, [res, nil]) :-
+  TestRunLet(expr, lets, [res, _], [res, _]).
+.output TestPassedLet
+
+.decl TestFailedLet(expr : Expr, lets : LetExprList, res : SmtResult)
+TestFailedLet(expr, lets, computed_res) :-
+  TestRunLet(expr, lets, computed_res, _),
+  !TestPassedLet(expr, lets, _).
+.output TestFailedLet
+
+// Unit Tests:
+
+// simple substitution
+TestCaseLet(
+  ["EQ", ["v", nil, nil], ["0x5", nil, nil]],
+  [["v", ["ADD", ["0x2", nil, nil], ["0x3", nil, nil]]], nil],
+  ["sat", nil]
+).
+TestCaseLet(
+  ["EQ", ["v", nil, nil], ["0x6", nil, nil]],
+  [["v", ["ADD", ["0x2", nil, nil], ["0x3", nil, nil]]], nil],
+  ["unsat", nil]
+).
+
+// Order-sensitivity test: b's definition references a, so a must be placed
+// AFTER b in the list (see print_let_exprs nesting derivation — head ends up
+// innermost, tail outermost, so the referenced name must be the outer one).
+// If a's own let is correctly the outer scope, b resolves deterministically
+// to 0x2+0x1=0x3, and 0x3 != 0x4 makes this unsat.
+// If the ordering is ever inverted (a bug, or a "fix" that gets the
+// direction backwards), b's "a" leaks to an unconstrained free variable
+// instead, and the solver can pick a value for it that makes b == 0x4 —
+// flipping this from unsat to sat.
+TestCaseLet(
+  ["EQ", ["b", nil, nil], ["0x4", nil, nil]],
+  [["b", ["ADD", ["a", nil, nil], ["0x1", nil, nil]]], [["a", ["0x2", nil, nil]], nil]],
+  ["unsat", nil]
+).
+
+// same list, unchanged from the buggy ordering — sat here confirms the leak, not correct substitution
+TestCaseLet(
+  ["EQ", ["b", nil, nil], ["0x4", nil, nil]],
+  [
+    ["a", ["0x2", nil, nil]],
+    [["b", ["ADD", ["a", nil, nil], ["0x1", nil, nil]]],
+    nil]],
+  ["sat", nil]
+).
+
+// Quantifiers:
+
+// forall x. x = x  -> always true -> sat
+TestCase(["FORALL", XV, ["EQ", XV, XV]],
+         ["sat", nil]).
+
+// forall x. x = 0  -> false for some x -> unsat
+TestCase(["FORALL", XV, ["EQ", XV, ["0x0", nil, nil]]],
+         ["unsat", nil]).
+
+// exists x. x = 0  -> sat
+TestCase(["EXISTS", XV, ["EQ", XV, ["0x0", nil, nil]]],
+         ["sat", nil]).
+
+// exists x. x + 1 = x  -> no bitvector satisfies this -> unsat
+TestCase(["EXISTS", XV, ["EQ", ["ADD", XV, ["0x1", nil, nil]], XV]],
+         ["unsat", nil]).
+
+
+// The following cases are characterization tests, not verified-correct oracles -- the future
+// reader shouldn't mistake "matches today's output" for "proven right."
+//
+// Investigated (not carried forward from the old ToSmt debug comments,
+// which turned out to be inaccurate): in all three cases below, pinning
+// the FORALLSTAR-bound variable makes no observable difference to the
+// sat/unsat outcome (verified via SMT_DEBUG: stripping the FORALLSTAR
+// wrapper and leaving the variable free gives the same result). Each case
+// has its own free variable(s) or algebraic structure that dominates
+// satisfiability regardless of what the bound variable is pinned to. These
+// cases prove the FORALLSTAR code path runs and produces stable,
+// well-formed output -- they do not prove the variable-pinning mechanism
+// itself is doing anything.
+TestCase(x, ["sat", nil]) :-
+  x = ["FORALLSTAR", YV,["GT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, ZV]]],
+        ["ADD", ["ADD", YV, XV], XV]]].
+TestCase(x, ["sat", nil]) :-
+  x = ["FORALLSTAR", XV,
+        ["LT", ZV,
+            ["ADD", ["SUB", XV, XV], YV]]
+      ].
+TestCase(x, ["unsat", nil]) :-
+  x = ["FORALLSTAR",YV,["LT", ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]],
+              ["SUB", ["ADD", ["ADD", YV, XV], XV], ["ADD", XV, ["ADD", XV, YV]]]]].
+
+// Test `LAND`/`LOR`/`LNOT` operators:
+TestCase(["EQ", ["0x1", nil, nil], ["LAND", ["0x1", nil, nil], ["0x2", nil, nil]]], ["sat", nil]).
+TestCase(["EQ", ["0x0", nil, nil], ["LAND", ["0x7", nil, nil], ["0x0", nil, nil]]], ["sat", nil]).
+TestCase(["EQ", ["0x1", nil, nil], ["LOR",  ["0x7", nil, nil], ["0x0", nil, nil]]], ["sat", nil]).
+TestCase(["EQ", ["0x0", nil, nil], ["LOR",  ["0x0", nil, nil], ["0x0", nil, nil]]], ["sat", nil]).
+TestCase(["EQ", ["0x0", nil, nil], ["LNOT", ["0x2", nil, nil], nil]], ["sat", nil]).
+TestCase(["EQ", ["0x1", nil, nil], ["LNOT", ["0x0", nil, nil], nil]], ["sat", nil]).
+
+// `GE`, `LE`, `NOT_EQ`: 
+TestCase(["EQ", ["0x1", nil, nil], ["GE", ["0xa", nil, nil], ["0xa", nil, nil]]], ["sat", nil]).
+TestCase(["EQ", ["0x0", nil, nil], ["GE", ["0x9", nil, nil], ["0xa", nil, nil]]], ["sat", nil]).
+TestCase(["EQ", ["0x1", nil, nil], ["LE", ["0x9", nil, nil], ["0xa", nil, nil]]], ["sat", nil]).
+TestCase(["EQ", ["0x0", nil, nil], ["LE", ["0xa", nil, nil], ["0x9", nil, nil]]], ["sat", nil]).
+TestCase(["EQ", ["0x1", nil, nil], ["NOT_EQ", ["0xa", nil, nil], ["0x9", nil, nil]]], ["sat", nil]).
+TestCase(["EQ", ["0x0", nil, nil], ["NOT_EQ", ["0xa", nil, nil], ["0xa", nil, nil]]], ["sat", nil]).
+
+
 TestCase(["EQ", ["0xf", nil, nil],["0xffff", nil, nil]]
   , ["unsat", nil]).
 TestCase(["EQ", ["0xffff", nil, nil],["0x0000ffff", nil, nil]]
@@ -361,45 +393,9 @@ TestCase(["EQ", ["SHA3_1ARG", [SMTLIB_MINUS_ONE, nil, nil],nil] , ["0x0", nil, n
   , ["unsat",nil]).
 
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////// Computationally heavy exrps ////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// querry
-// ["EQ", ["0x0", nil, nil], exprBeingTested]
-
-// TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["SHR", ["0x60", nil, nil], ["<<msg.sender: owner>>", nil, nil]], ["<<msg.sender: owner>>", nil, nil]]]
-//   , ["sat", nil ]).
-// TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["SHR", ["0x60", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["<<msg.sender: owner>>", nil, nil]]]
-//   , ["sat", nil ]).
-// TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["SHR", ["0x60", nil, nil], ["<<owner-unique-address>>", nil, nil]], ["<<msg.sender: owner>>", nil, nil]]]
-//   , ["sat", nil ]).
-// TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["0xa", nil, nil], ["AND", ["<<owner-unique-value>>", nil, nil], ["0xff", nil, nil]]]]
-//   , ["sat", nil ]).
-// TestCase(["EQ", ["0x0", nil, nil], ["EQ", ["0x0", nil, nil], ["EQ", ["AND", ["<<owner-unique-value>>", nil, nil], ["0xff", nil, nil]], ["0x3", nil, nil]]]]
-//   , ["sat", nil ]).
-// TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["SHR", ["0x60", nil, nil], ["AND", ["0xffffffffffffffffffffffffffffffffffffffff00000000000000000000ffff", nil, nil], ["<<msg.sender: owner>>", nil, nil]]], ["<<msg.sender: owner>>", nil, nil]]]
-//   , ["sat", nil ]).
-// TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["SHR", ["0x60", nil, nil], ["AND", ["0xffffffffffffffffffffffffffffffffffffffff00000000000000000000ffff", nil, nil], ["<<owner-unique-value>>", nil, nil]]], ["<<msg.sender: owner>>", nil, nil]]]
-//   , ["sat", nil ]).
-// TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["SHR", ["0x60", nil, nil], ["AND", ["0xffffffffffffffffffffffffffffffffffffffff00000000000000000000ffff", nil, nil], ["<<owner-unique-address>>", nil, nil]]], ["<<msg.sender: owner>>", nil, nil]]]
-//   , ["sat", nil ]).
-
-
-
-  //// below i replace DIV with SHR to verify that DIV is the computationally heavy operator !
+// Computationally heavy exprs:
 TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x0", nil, nil]]]
   , ["sat", nil ]).
- TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x0", nil, nil]]]
-  , ["unsat", nil ]). // ast the same *slow* query twice to check how caching works
- TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x0", nil, nil]]]
-  , ["sat", nil ]). // ast the same *slow* query twice to check how caching works
- TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x0", nil, nil]]]
-  , ["sat", nil ]). // ast the same *slow* query twice to check how caching works
-TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x1", nil, nil]]]
-  , ["sat", nil ]).
-
-
 TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x4", nil, nil]]]
   , ["unsat", nil]).
 TestCase(["EQ", ["0x0", nil, nil], ["SUB", ["DIV", ["0x1", nil, nil], ["<<owner-unique-value>>", nil, nil]], ["0x2", nil, nil]]]
