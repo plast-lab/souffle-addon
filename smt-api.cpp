@@ -1,26 +1,28 @@
 #include <souffle/SouffleInterface.h>
 #include <z3++.h>
 
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/range/algorithm_ext/erase.hpp>
+#include <algorithm>
 #include <cassert>
+#include <cctype>
+#include <cstdlib>
 #include <iostream>
-#include <list>
+#include <map>
 #include <random>
 #include <set>
-#include <sstream>
+#include <stdexcept>
+#include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "souffle/RecordTable.h"
 #include "souffle/SymbolTable.h"
 
-using namespace std;
-using namespace z3;
+// ------------------------------------------------------------------------
+// Debug helpers
+// ------------------------------------------------------------------------
 
-// #define DEBUG true
-
+// #define DEBUG 1
 #ifdef DEBUG
 #define DEBUG_MSG(str)             \
   do {                             \
@@ -32,16 +34,11 @@ using namespace z3;
   } while (false)
 #endif
 
+// Width of every bit-vector in the encoding. EVM words are 256-bit; the 32-bit
+// branch exists only for quick local experiments.
 #define BIT_VEC_LENGTH 256
 
 #if BIT_VEC_LENGTH == 256
-#define SMTLIB_TRUE_VAL "#x0000000000000000000000000000000000000000000000000000000000000001"
-#define SMTLIB_FALSE_VAL "#x0000000000000000000000000000000000000000000000000000000000000000"
-#define SMTLIB_MINUS_ONE "#xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-#define SMTLIB_8 "#x0000000000000000000000000000000000000000000000000000000000000008"
-#define NUM_OF_BYTES_IN_BV "#x000000000000000000000000000000000000000000000000000000000000001f"
-#define MASK_M_S_BYTE "#xff00000000000000000000000000000000000000000000000000000000000000"
-
 #define RANDOM_VALUE_0 "#x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 #define RANDOM_VALUE_1 "#x1123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 #define RANDOM_VALUE_2 "#x2123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -49,15 +46,7 @@ using namespace z3;
 #define RANDOM_VALUE_4 "#x4123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 #define RANDOM_VALUE_5 "#x5123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 #define RANDOM_VALUE_6 "#x6123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-
 #else
-#define SMTLIB_TRUE_VAL "#x00000001"
-#define SMTLIB_FALSE_VAL "#x00000000"
-#define SMTLIB_MINUS_ONE "#xffffffff"
-#define SMTLIB_8 "#x00000008"
-#define NUM_OF_BYTES_IN_BV "#x00000003"
-#define MASK_M_S_BYTE "#xff000000"
-
 #define RANDOM_VALUE_0 "#x01234567"
 #define RANDOM_VALUE_1 "#x11234567"
 #define RANDOM_VALUE_2 "#x21234567"
@@ -67,807 +56,422 @@ using namespace z3;
 #define RANDOM_VALUE_6 "#x61234567"
 #endif
 
-extern "C" {
-// Souffle may evaluate functors on several OpenMP worker threads (`souffle -j<N>`).
-// A z3::context is NOT thread-safe, so a single shared context/solver crashes
-// (Z3 assertion violation + segfault) under parallel evaluation. Giving every
-// thread its own context/solver keeps parallel solving while isolating Z3 state.
+// Enable printing SMT queries to stderr when SMT_DEBUG is set in the environment.
+static const bool smt_debug = std::getenv("SMT_DEBUG") != nullptr;
+
+// ------------------------------------------------------------------------
+// Per-thread Z3 state
 //
-// `encoded_variable_names` is the hand-off from print_to_smt_style() (writer) to
-// smt_response_with_model() (reader). Making it thread_local is safe ONLY because
-// the .dl always composes them within one rule body as
-//   @smt_response_with_model(@print_to_smt_style(...))
-// so both run on the same thread. Materialising the SMT string into a relation
-// and consuming it from a separate rule/stratum would break this.
-thread_local z3::context ctx;
-thread_local z3::solver smt_solver(ctx);
+// Souffle may evaluate functors on several OpenMP worker threads
+// (`souffle -j<N>`). A z3::context is NOT thread-safe, so a single shared
+// context/solver crashes (Z3 assertion violation + segfault) under parallel
+// evaluation. Giving every thread its own context/solver keeps parallel
+// solving while isolating Z3 state. The response caches are likewise
+// per-thread: lower hit rate than a shared cache, but correct without locks.
+// ------------------------------------------------------------------------
 
-thread_local std::map<string, string> encoded_variable_names;
+static thread_local z3::context ctx;
+static thread_local z3::solver smt_solver(ctx);
 
-// Enable printing SMT queries to stdout when
-// SMT_DEBUG env variable is set
-const bool smt_debug = std::getenv("SMT_DEBUG") != nullptr;
+static thread_local std::unordered_map<std::string, souffle::RamDomain> cache_smt_response_with_model;
+static thread_local std::map<std::pair<std::string, std::set<std::string>>, souffle::RamDomain> cache_print_to_smt_style;
 
-bool isPredefinedFunction(string op) {
-  if (op == "isZero" || op == "isNotZero" || op == "byte" || op == "signextend" || op == "my_exp" || op == "my_bvshl" || op == "my_bvashr" ||
-      op == "my_bvlshr" || op == "my_eq" || op == "my_not_eq" || op == "my_bvgt" || op == "my_bvsgt" || op == "my_bvlt" || op == "my_bvslt" ||
-      op == "my_land" || op == "my_lor" || op == "my_lnot" || op == "my_bvge" || op == "my_bvle" ||
+namespace {
 
-      op == "sha3" || op == "sha3_1arg" || op == "sha3_2arg") {
-    return false;
-  } else {
-    return true;
-  }
+// ------------------------------------------------------------------------
+// Small utilities
+// ------------------------------------------------------------------------
+
+bool is_hex_literal(const std::string& s) { return s.rfind("0x", 0) == 0 || s.rfind("0X", 0) == 0; }
+
+// Z3 prints bit-vector model values as "#x0000..00ab". Souffle-side we want
+// "0xab": drop the "#x"/"0x" prefix and leading zeros (keep at least one digit).
+std::string change_representation(const std::string& smt_bv_constant) {
+  std::string digits = smt_bv_constant.substr(2);
+  digits.erase(0, std::min(digits.find_first_not_of('0'), digits.size() - 1));
+  return "0x" + digits;
 }
 
-string inline_user_defined_function(string op, string lexpr, string rexpr) {
-  if (op == "isZero") {
-    return "(ite (= " + lexpr + " " + SMTLIB_FALSE_VAL +
-           ")"
-           " " +
-           SMTLIB_TRUE_VAL " " + SMTLIB_FALSE_VAL ")";
+// One of a small fixed pool of "random-ish" constants, used to pin
+// FORALLSTAR-bound and caller-listed variables to a concrete value.
+std::string get_random_special_value() {
+  static const std::string pool[] = {RANDOM_VALUE_0, RANDOM_VALUE_1, RANDOM_VALUE_2, RANDOM_VALUE_3,
+                                     RANDOM_VALUE_4, RANDOM_VALUE_5, RANDOM_VALUE_6};
+  static thread_local std::mt19937 gen{std::random_device{}()};
+  std::uniform_int_distribution<std::size_t> pick(0, (sizeof(pool) / sizeof(pool[0])) - 1);
+  return pool[pick(gen)];
+}
+
+// Pipe-quote a symbol for SMT-LIB. `|foo|` and `foo` denote the same symbol,
+// so quoting unconditionally always matches whatever z3's own printer chose
+// for the same name inside the assertion body.
+std::string quote_symbol(const std::string& s) {
+  if (s.find('|') != std::string::npos || s.find('\\') != std::string::npos) {
+    throw std::runtime_error("smt-api: symbol contains '|' or '\\', cannot encode: " + s);
   }
-  if (op == "isNotZero") {
-    return "(ite (= " + lexpr + " " + SMTLIB_FALSE_VAL +
-           ")"
-           " " +
-           SMTLIB_FALSE_VAL " " + SMTLIB_TRUE_VAL ")";
+  return "|" + s + "|";
+}
+
+// ------------------------------------------------------------------------
+// Expression tree -> Z3 AST
+//
+// The Souffle-side tree (Expr = [base, left, right]) is translated straight
+// into z3::expr. Every value is a BIT_VEC_LENGTH-bit bit-vector. "Truthy" is
+// the value 1; comparison / logical operators return 1 or 0 so they can be
+// nested like any other sub-expression, matching the original encoding.
+// ------------------------------------------------------------------------
+
+struct Translator {
+  z3::context& c;
+  unsigned width;
+
+  z3::expr zero;          // 0
+  z3::expr one;           // 1  (canonical "true")
+  z3::expr all_ones;      // -1 / 0xffff..ff
+  z3::expr eight;         // 8
+  z3::expr msbyte_index;  // width/8 - 1  (index of the most significant byte)
+  z3::expr msbyte_mask;   // 0xff << (width - 8)
+
+  std::map<std::string, z3::expr> free_consts;  // name -> bv const, emitted as declare-fun
+  std::map<std::string, z3::expr> let_subst;    // name -> definition (inlined on use)
+  std::set<std::string> pinned;                 // names constrained to a random value
+
+  bool has_quantifier = false;  // real FORALL/EXISTS present -> logic BV
+  bool uses_int_arith = false;  // EXP present (int2bv/power) -> logic ALL
+
+  Translator(z3::context& ctx_, unsigned w)
+      : c(ctx_),
+        width(w),
+        zero(ctx_.bv_val(0, w)),
+        one(ctx_.bv_val(1, w)),
+        all_ones(~ctx_.bv_val(0, w)),
+        eight(ctx_.bv_val(8, w)),
+        msbyte_index(ctx_.bv_val(static_cast<int>(w / 8 - 1), w)),
+        msbyte_mask(z3::shl(ctx_.bv_val(0xff, w), ctx_.bv_val(static_cast<int>(w - 8), w))) {}
+
+  z3::expr truthy(const z3::expr& cond) { return z3::ite(cond, one, zero); }
+
+  z3::expr get_const(const std::string& name) {
+    auto it = free_consts.find(name);
+    if (it != free_consts.end()) return it->second;
+    z3::expr e = c.bv_const(name.c_str(), width);
+    free_consts.emplace(name, e);
+    return e;
   }
-  if (op == "byte") {
-    return std::string("(let (") + " (move (bvmul " + SMTLIB_8 + " " + lexpr +
-           " ))"
-           " )"
-           " (bvlshr (bvand " +
-           //  rexpr + " (bvlshr " + MASK_M_S_BYTE + " " + "move)) (bvmul " + SMTLIB_8 + " " + "(bvsub " + NUM_OF_BYTES_IN_BV + " " + lexpr + ")) )" + ")";
-           rexpr + " (bvlshr " + MASK_M_S_BYTE + " " + "move)) (bvmul " + SMTLIB_8 + " " + "(bvsub " + NUM_OF_BYTES_IN_BV + " " + lexpr + ")) )" + ")";
-  }
-  if (op == "signextend") {
-    return std::string("(let (") + "(move (bvmul" + SMTLIB_8 + " " + "(bvadd " + lexpr + " " + SMTLIB_TRUE_VAL + " )))" + ")" + "(ite (= " + SMTLIB_FALSE_VAL +
-           " (bvand " + rexpr + " (bvshl " + SMTLIB_TRUE_VAL + " " + "(bvsub move " + SMTLIB_TRUE_VAL +
-           " ))))"
-           " " +
-           rexpr + " " + "(bvor " + rexpr + " (bvshl " + SMTLIB_MINUS_ONE + " " + "move)))" + ")";
-  }
-  if (op == "my_exp") {
-    if (BIT_VEC_LENGTH == 256) {
-      return "((_ int2bv 256) (to_int (^ (bv2int " + lexpr + ") (bv2int " + rexpr + "))) )";
-    } else {
-      return "((_ int2bv 32) (to_int (^ (bv2int " + lexpr + ") (bv2int " + rexpr + "))) )";
+
+  // "0x1a3" (any length up to width/4 hex digits) -> width-bit numeral, built
+  // from 4-bit chunks so only long-stable Z3 API is used.
+  z3::expr bv_from_hex(const std::string& lit) {
+    std::string h;
+    for (std::size_t i = (lit.size() >= 2 ? 2 : 0); i < lit.size(); ++i) {
+      char ch = lit[i];
+      if (!std::isxdigit(static_cast<unsigned char>(ch))) {
+        throw std::runtime_error("smt-api: malformed hex literal: " + lit);
+      }
+      h.push_back(ch);
     }
-  }
-  if (op == "my_bvshl") {
-    return "(bvshl " + rexpr + " " + lexpr + ")";
-  }
-  if (op == "my_bvashr") {
-    return "(bvashr " + rexpr + " " + lexpr + ")";
-  }
-  if (op == "my_bvlshr") {
-    return "(bvlshr " + rexpr + " " + lexpr + ")";
-  }
-  if (op == "my_not_eq") {
-    return "(ite (= " + lexpr + " " + rexpr +
-           ")"
-           " " +
-           SMTLIB_FALSE_VAL " " + SMTLIB_TRUE_VAL ")";
-  }
-  if (op == "my_eq") {
-    return "(ite (= " + lexpr + " " + rexpr +
-           ")"
-           " " +
-           SMTLIB_TRUE_VAL " " + SMTLIB_FALSE_VAL ")";
+    if (h.empty()) h = "0";
+    const std::size_t max_digits = width / 4;
+    if (h.size() > max_digits) h = h.substr(h.size() - max_digits);  // keep low bits
+
+    z3::expr_vector chunks(c);
+    for (char ch : h) {
+      int v = (ch <= '9') ? (ch - '0') : (std::tolower(static_cast<unsigned char>(ch)) - 'a' + 10);
+      chunks.push_back(c.bv_val(v, 4));
+    }
+    z3::expr val = z3::concat(chunks);
+    unsigned bits = 4u * static_cast<unsigned>(h.size());
+    if (bits < width) val = z3::zext(val, width - bits);
+    return val;
   }
 
-  if (op == "my_land") {
-    return "(ite (= " + lexpr + " " + SMTLIB_FALSE_VAL + ") " + SMTLIB_FALSE_VAL + " (ite (= " + rexpr + " " + SMTLIB_FALSE_VAL + " )" + SMTLIB_FALSE_VAL +
-           " " + SMTLIB_TRUE_VAL + "))";
-  }
-  if (op == "my_lor") {
-    return "(ite (= " + lexpr + " " + SMTLIB_FALSE_VAL + ") " + " (ite (= " + rexpr + " " + SMTLIB_FALSE_VAL + " )" + SMTLIB_FALSE_VAL + " " +
-           SMTLIB_TRUE_VAL ")" + SMTLIB_TRUE_VAL + ")";
-  }
-  if (op == "my_lnot") {
-    return "(ite (= " + lexpr + " " + SMTLIB_FALSE_VAL + ") " + SMTLIB_TRUE_VAL + " " + SMTLIB_FALSE_VAL + ")";
+  z3::expr translate(souffle::SymbolTable* st, souffle::RecordTable* rt, souffle::RamDomain node,
+                     const std::map<std::string, z3::expr>& bound) {
+    if (node == 0) throw std::runtime_error("smt-api: unexpected nil expression node");
+
+    const souffle::RamDomain* t = rt->unpack(node, 3);
+    std::string base = st->decode(t[0]);
+    const souffle::RamDomain left = t[1];
+    const souffle::RamDomain right = t[2];
+
+    // ---- leaf ----
+    if (left == 0 && right == 0) {
+      if (is_hex_literal(base)) return bv_from_hex(base);
+      if (base.empty()) throw std::runtime_error("smt-api: empty leaf symbol");
+      auto b = bound.find(base);
+      if (b != bound.end()) return b->second;
+      auto s = let_subst.find(base);
+      if (s != let_subst.end()) return s->second;
+      return get_const(base);
+    }
+
+    // ---- quantifiers ----
+    if (base == "FORALL" || base == "EXISTS") {
+      has_quantifier = true;
+      const souffle::RamDomain* vt = rt->unpack(left, 3);
+      std::string vname = st->decode(vt[0]);
+      z3::expr qv = c.bv_const(vname.c_str(), width);
+      std::map<std::string, z3::expr> inner(bound);
+      inner.insert_or_assign(vname, qv);
+      z3::expr body = translate(st, rt, right, inner);
+      z3::expr q = (base == "FORALL") ? z3::forall(qv, body == one) : z3::exists(qv, body == one);
+      return truthy(q);
+    }
+    if (base == "FORALLSTAR") {
+      const souffle::RamDomain* vt = rt->unpack(left, 3);
+      std::string vname = st->decode(vt[0]);
+      get_const(vname);
+      pinned.insert(vname);
+      return translate(st, rt, right, bound);
+    }
+
+    // ---- operators ----
+    z3::expr L = translate(st, rt, left, bound);
+    const bool unary = (right == 0);
+    z3::expr R = unary ? L : translate(st, rt, right, bound);
+
+    if (base == "ADD") return L + R;
+    if (base == "SUB") return L - R;
+    if (base == "MUL" || base == "binop_mul") return L * R;
+    if (base == "DIV") return z3::udiv(L, R);
+    if (base == "MOD") return z3::urem(L, R);
+    if (base == "SDIV") return L / R;  // bvsdiv
+    if (base == "SMOD") return z3::smod(L, R);
+    if (base == "AND") return L & R;
+    if (base == "OR") return L | R;
+    if (base == "XOR") return L ^ R;
+    if (base == "NOT") return ~L;       // unary
+    if (base == "UNOP_NEG") return -L;  // unary
+    if (base == "SHL") return z3::shl(R, L);   // shift amount is the LEFT child
+    if (base == "SHR") return z3::lshr(R, L);
+    if (base == "SAR") return z3::ashr(R, L);
+    if (base == "EQ") return truthy(L == R);
+    if (base == "NOT_EQ") return truthy(L != R);
+    if (base == "GT") return truthy(z3::ugt(L, R));
+    if (base == "LT") return truthy(z3::ult(L, R));
+    if (base == "GE") return truthy(z3::uge(L, R));
+    if (base == "LE") return truthy(z3::ule(L, R));
+    if (base == "SGT") return truthy(L > R);  // signed
+    if (base == "SLT") return truthy(L < R);  // signed
+    if (base == "ISZERO" || base == "UNOP_ISZERO") return truthy(L == zero);  // unary
+    if (base == "ISNOTZERO") return truthy(L != zero);                        // unary
+    if (base == "LAND") return z3::ite(L == zero, zero, z3::ite(R == zero, zero, one));
+    if (base == "LOR") return z3::ite(L == zero, z3::ite(R == zero, zero, one), one);
+    if (base == "LNOT") return z3::ite(L == zero, one, zero);  // unary
+    if (base == "SHA3" || base == "SHA3_1ARG" || base == "SHA3_2ARG") return all_ones;
+
+    if (base == "BYTE") {
+      // byte L (counting from the most-significant end) of R
+      z3::expr shift_up = eight * L;
+      z3::expr isolated = R & z3::lshr(msbyte_mask, shift_up);
+      z3::expr shift_down = eight * (msbyte_index - L);
+      return z3::lshr(isolated, shift_down);
+    }
+    if (base == "SIGNEXTEND") {
+      // sign-extend R taking byte L as the sign byte
+      z3::expr move = eight * (L + one);
+      z3::expr sign_bit = z3::shl(one, move - one);
+      z3::expr is_neg = (R & sign_bit) != zero;
+      return z3::ite(is_neg, R | z3::shl(all_ones, move), R);
+    }
+    if (base == "EXP") {
+      uses_int_arith = true;
+      z3::expr b_int(c, Z3_mk_bv2int(c, L, false));
+      z3::expr e_int(c, Z3_mk_bv2int(c, R, false));
+      z3::expr p(c, Z3_mk_power(c, b_int, e_int));
+      z3::expr p_int = p.is_int() ? p : z3::expr(c, Z3_mk_real2int(c, p));
+      return z3::expr(c, Z3_mk_int2bv(c, width, p_int));
+    }
+
+    throw std::runtime_error("smt-api: unknown operator: " + base);
   }
 
-  if (op == "my_bvge") {
-    return "(ite (bvuge " + lexpr + " " + rexpr +
-           ")"
-           " " +
-           SMTLIB_TRUE_VAL " " + SMTLIB_FALSE_VAL ")";
-  }
-  if (op == "my_bvle") {
-    return "(ite (bvule " + lexpr + " " + rexpr +
-           ")"
-           " " +
-           SMTLIB_TRUE_VAL " " + SMTLIB_FALSE_VAL ")";
+  // Full query text minus the pinning constraints (this is the cache key).
+  std::string render_base(const z3::expr& assertion) {
+    std::string logic = uses_int_arith ? "ALL" : (has_quantifier ? "BV" : "QF_BV");
+    std::string out = "(set-logic " + logic + ")\n";
+    for (const auto& kv : free_consts) {
+      out += "(declare-fun " + quote_symbol(kv.first) + " () (_ BitVec " + std::to_string(width) + "))\n";
+    }
+    out += "(assert " + assertion.to_string() + ")\n";
+    return out;
   }
 
-  if (op == "my_bvgt") {
-    return "(ite (bvugt " + lexpr + " " + rexpr +
-           ")"
-           " " +
-           SMTLIB_TRUE_VAL " " + SMTLIB_FALSE_VAL ")";
+  std::string render_pins() {
+    std::string out;
+    for (const auto& name : pinned) {
+      out += "(assert (= " + quote_symbol(name) + " " + get_random_special_value() + "))\n";
+    }
+    return out;
   }
-  if (op == "my_bvsgt") {
-    return "(ite (bvsgt " + lexpr + " " + rexpr +
-           ")"
-           " " +
-           SMTLIB_TRUE_VAL " " + SMTLIB_FALSE_VAL ")";
-  }
-  if (op == "my_bvlt") {
-    return "(ite (bvult " + lexpr + " " + rexpr +
-           ")"
-           " " +
-           SMTLIB_TRUE_VAL " " + SMTLIB_FALSE_VAL ")";
-  }
-  if (op == "my_bvslt") {
-    return "(ite (bvslt " + lexpr + " " + rexpr +
-           ")"
-           " " +
-           SMTLIB_TRUE_VAL " " + SMTLIB_FALSE_VAL ")";
-  }
-  if (op == "sha3") {
-    return SMTLIB_MINUS_ONE;
-  }
-  if (op == "sha3_1arg") {
-    return SMTLIB_MINUS_ONE;
-  }
-  if (op == "sha3_2arg") {
-    return SMTLIB_MINUS_ONE;
-  }
-  throw op;
+};
+
+// let list: [ [var, expr], rest ].  Processed tail-first so the list head is
+// the innermost scope -- a head binding sees every other binding, a tail
+// binding sees none of them. This reproduces the original nesting, including
+// the deliberate "leak" exercised by the order-sensitivity tests.
+void collect_lets(Translator& tr, souffle::SymbolTable* st, souffle::RecordTable* rt, souffle::RamDomain node) {
+  if (node == 0) return;
+  const souffle::RamDomain* cell = rt->unpack(node, 2);
+  collect_lets(tr, st, rt, cell[1]);  // outer scopes first
+
+  const souffle::RamDomain* pair = rt->unpack(cell[0], 2);
+  std::string var = st->decode(pair[0]);
+  if (is_hex_literal(var)) return;  // legacy: skip 0x-named bindings
+  z3::expr rhs = tr.translate(st, rt, pair[1], {});
+  tr.let_subst.insert_or_assign(var, rhs);
 }
 
-string change_representation(string smt_bv_constant) {
-  string symbolic_constant = smt_bv_constant;
-  string substring = symbolic_constant.substr(2, symbolic_constant.length());
-  substring.erase(0, std::min(substring.find_first_not_of('0'), substring.size() - 1));
-  return "0x" + substring;
+// model -> list of [name, "0x..value"] record tuples
+std::vector<souffle::RamDomain> model_entries(z3::solver& solver, souffle::SymbolTable* st, souffle::RecordTable* rt) {
+  z3::model model = solver.get_model();
+  std::vector<souffle::RamDomain> entries;
+  for (unsigned i = 0; i < model.size(); ++i) {
+    z3::func_decl d = model[i];
+    if (d.arity() > 0) continue;  // only constants
+    souffle::RamDomain entry[2];
+    entry[0] = st->encode(d.name().str());
+    entry[1] = st->encode(change_representation(model.get_const_interp(d).to_string()));
+    entries.push_back(rt->pack(entry, 2));
+  }
+  return entries;
 }
 
-string repeat_symbol_n_times(string symbol, int n) {
-  string str = "";
-  for (int i = 0; i < n; i++) {
-    str.insert(0, symbol);
+souffle::RamDomain to_model_list(const std::vector<souffle::RamDomain>& entries, souffle::RecordTable* rt) {
+  souffle::RamDomain rest = 0;
+  for (auto it = entries.rbegin(); it != entries.rend(); ++it) {
+    souffle::RamDomain cell[2] = {*it, rest};
+    rest = rt->pack(cell, 2);
   }
-  return str;
+  return rest;
 }
 
-string zeros(int len) {
-  string zeros = "";
-  for (int i = 0; i < len; i++) {
-    zeros.insert(0, "0");
+// RAII push/pop so an exception from check() can't leak a solver scope.
+struct SolverScope {
+  z3::solver& s;
+  explicit SolverScope(z3::solver& s_) : s(s_) { s.push(); }
+  ~SolverScope() { s.pop(); }
+};
+
+void traverse_model(z3::solver& solver) {
+  if (!smt_debug) return;
+  z3::model model = solver.get_model();
+  for (unsigned i = 0; i < model.size(); ++i) {
+    z3::func_decl d = model[i];
+    if (d.arity() > 0) continue;
+    std::cerr << d.name() << " = " << model.get_const_interp(d) << std::endl;
   }
-  return zeros;
 }
 
-string fs(int len) {
-  string fs = "";
-  for (int i = 0; i < len; i++) {
-    fs.insert(0, "f");
+}  // namespace
+
+// ------------------------------------------------------------------------
+// Souffle functor entry points
+// ------------------------------------------------------------------------
+
+extern "C" {
+
+souffle::RamDomain print_to_smt_style(souffle::SymbolTable* symbol_table, souffle::RecordTable* record_table,
+                                      souffle::RamDomain arg, souffle::RamDomain arg_bound_vars,
+                                      souffle::RamDomain let_expr_list) {
+  assert(symbol_table && "NULL symbol table");
+  assert(record_table && "NULL record table");
+
+  Translator tr(ctx, BIT_VEC_LENGTH);
+
+  // caller-listed bound vars: declare and pin each
+  for (souffle::RamDomain n = arg_bound_vars; n != 0;) {
+    const souffle::RamDomain* cell = record_table->unpack(n, 2);
+    std::string name = symbol_table->decode(cell[0]);
+    tr.get_const(name);
+    tr.pinned.insert(name);
+    n = cell[1];
   }
-  return fs;
+
+  collect_lets(tr, symbol_table, record_table, let_expr_list);
+
+  z3::expr assertion = tr.translate(symbol_table, record_table, arg, {}) == tr.one;
+
+  std::string base = tr.render_base(assertion);
+  std::pair<std::string, std::set<std::string>> key(base, tr.pinned);
+
+  auto hit = cache_print_to_smt_style.find(key);
+  if (hit != cache_print_to_smt_style.end()) return hit->second;
+
+  std::string full = base + tr.render_pins();
+  souffle::RamDomain encoded = symbol_table->encode(full);
+  cache_print_to_smt_style.emplace(std::move(key), encoded);
+  return encoded;
 }
 
-bool char_msb_is_zero(char c) { return c == '0' | c == '1' | c == '2' | c == '3' | c == '4' | c == '5' | c == '6' | c == '7'; }
+souffle::RamDomain smt_response_with_model(souffle::SymbolTable* symbol_table, souffle::RecordTable* record_table,
+                                          souffle::RamDomain text) {
+  const std::string& query = symbol_table->decode(text);
 
-string fix_length(string str, int hex_len) {
-  // str of the form 0x____, with <= hex_len hex digits
-
-  if (str.length() > hex_len + 2) {
-    throw std::invalid_argument(str + " too long input");
-  }
-
-  string prefix;
-
-  prefix = zeros(hex_len + 2 - str.length());
-  return str.insert(2, prefix);
-}
-
-souffle::RamDomain map_list_to_tuples(std::list<souffle::RamDomain> l, souffle::RecordTable *record_table) {
-  if (l.empty()) {
-    return 0;
-  }
-  souffle::RamDomain res[2];
-  res[0] = l.front();
-  l.pop_front();
-  res[1] = map_list_to_tuples(l, record_table);
-  return record_table->pack(res, 2);
-}
-
-std::list<souffle::RamDomain> get_list_of_model_entries(solver smt_solver, souffle::SymbolTable *symbol_table, souffle::RecordTable *record_table) {
-  z3::model model = smt_solver.get_model();
-  std::list<souffle::RamDomain> entry_list = {};
-  // traversing the model
-  for (unsigned i = 0; i < model.size(); i++) {
-    func_decl var = model[i];
-    // skip functions from the model parsing
-    // we only care for the variable-constants of the model
-    if (var.arity() > 0) continue;
-    souffle::RamDomain model_entry[2];
-    string trimmed_variable_name = var.name().str();
-
-    string original_variable_name = encoded_variable_names.at(trimmed_variable_name);
-
-    model_entry[0] = symbol_table->encode(original_variable_name);
-    string value = model.get_const_interp(var).to_string();
-    string changed_value = change_representation(value);
-    model_entry[1] = symbol_table->encode(changed_value);
-    entry_list.push_front(record_table->pack(model_entry, 2));
-  }
-  // we can evaluate expressions in the model.
-  // std::cout << "x + y + 1 = " << model.eval(x + y + 1) << "\n";
-  return entry_list;
-}
-
-// hash<string> hasher;
-// thread_local: caches are now per-thread (see note at the top of the extern "C"
-// block). Lower hit rate than a shared cache, but correct without locking.
-thread_local unordered_map<string, souffle::RamDomain> cache_smt_response_with_model = {};
-souffle::RamDomain smt_response_with_model(souffle::SymbolTable *symbol_table, souffle::RecordTable *record_table, souffle::RamDomain text) {
-  const std::string &query = symbol_table->decode(text);
-
-  if (cache_smt_response_with_model.find(query) != cache_smt_response_with_model.end()) {
-    // we have already make this computation once!
-    return cache_smt_response_with_model.at(query);
-  }
+  auto cached = cache_smt_response_with_model.find(query);
+  if (cached != cache_smt_response_with_model.end()) return cached->second;
 
   DEBUG_MSG(query);
 
-  souffle::RamDomain res[2];
-  std::list<souffle::RamDomain> assignments;
-
-  smt_solver.push();
+  bool parse_ok = true;
+  SolverScope scope(smt_solver);
   try {
-    smt_solver.from_string((
-                               // define_functions_prologue+
-                               query)
-                               .c_str());
-  } catch (z3::exception ex) {
-    // cout << query << endl;
-    cout << "Exception: Invalid SMT query" << endl;
+    smt_solver.from_string(query.c_str());
+  } catch (const z3::exception& ex) {
+    parse_ok = false;
+    std::cerr << "smt-api: invalid SMT query: " << ex.msg() << std::endl;
   }
-  z3::check_result solver_result = smt_solver.check();
 
-  souffle::RamDomain result;
-  switch (solver_result) {
-    case unsat:
-      res[0] = symbol_table->encode("unsat");
-      res[1] = 0;
-      result = record_table->pack(&res[0], 2);
-      cache_smt_response_with_model[query] = result;
-      break;
-    case sat:
-      assignments = get_list_of_model_entries(smt_solver, symbol_table, record_table);
-      res[0] = symbol_table->encode("sat");
-      res[1] = map_list_to_tuples(assignments, record_table);
-      result = record_table->pack(&res[0], 2);
-      cache_smt_response_with_model[query] = result;
-      break;
-    default:
-      res[0] = symbol_table->encode("unknown");
-      res[1] = 0;
-      result = record_table->pack(&res[0], 2);
-      cache_smt_response_with_model[query] = result;
-      break;
+  z3::check_result verdict = parse_ok ? smt_solver.check() : z3::unknown;
+  const char* tag = (verdict == z3::unsat) ? "unsat" : (verdict == z3::sat) ? "sat" : "unknown";
+
+  std::vector<souffle::RamDomain> assignments;
+  souffle::RamDomain res[2];
+  res[0] = symbol_table->encode(tag);
+  if (verdict == z3::sat) {
+    assignments = model_entries(smt_solver, symbol_table, record_table);
+    res[1] = to_model_list(assignments, record_table);
+  } else {
+    res[1] = 0;
   }
-  smt_solver.pop();
+  souffle::RamDomain result = record_table->pack(res, 2);
+
+  if (parse_ok) cache_smt_response_with_model.emplace(query, result);
+
   if (smt_debug) {
-    std::cerr << "(push)" << std::endl;
-    std::cerr << query << "(check-sat) ; " << symbol_table->decode(res[0]) << std::endl;
-    if (symbol_table->decode(res[0]) == "sat") {
+    std::cerr << "(push)\n" << query << "(check-sat) ; " << tag << std::endl;
+    if (verdict == z3::sat) {
       std::cerr << "(get-model) ; ";
       for (souffle::RamDomain entry : assignments) {
-        const souffle::RamDomain *my_tuple = record_table->unpack(entry, 2);
-        std::cerr << symbol_table->decode(my_tuple[0]) << " = " << symbol_table->decode(my_tuple[1]) << " ";
+        const souffle::RamDomain* tup = record_table->unpack(entry, 2);
+        std::cerr << symbol_table->decode(tup[0]) << " = " << symbol_table->decode(tup[1]) << " ";
       }
-      std::cerr << std::endl << "(pop)" << std::endl;
+      std::cerr << "\n(pop)" << std::endl;
     }
   }
   return result;
 }
 
-// thread_local: these accumulate state during a single print_to_smt_style() call
-// and MUST NOT be shared between threads (they are clear()ed and rebuilt on every
-// call). operator_mapping is effectively read-only after the first
-// populate_operator_mapping() on each thread.
-thread_local std::set<string> global_set_for_vars = {};
-thread_local std::set<string> global_set_for_bounded_vars = {};
-thread_local std::set<string> global_set_let_defines = {};
-thread_local std::set<string> global_set_let_uses = {};
-thread_local std::map<string, string> operator_mapping = {};
-
-void populate_operator_mapping() {
-  operator_mapping.insert(make_pair("NOT_EQ", "my_not_eq"));
-  operator_mapping.insert(make_pair("binop_mul", "bvmul"));
-  operator_mapping.insert(make_pair("UNOP_NEG", "bvneg"));
-  operator_mapping.insert(make_pair("UNOP_ISZERO", "isZero"));
-
-  operator_mapping.insert(make_pair("ADD", "bvadd"));
-  operator_mapping.insert(make_pair("SUB", "bvsub"));
-  operator_mapping.insert(make_pair("MUL", "bvmul"));
-
-  operator_mapping.insert(make_pair("DIV", "bvudiv"));
-  operator_mapping.insert(make_pair("MOD", "bvurem"));
-  operator_mapping.insert(make_pair("SDIV", "bvsdiv"));
-  operator_mapping.insert(make_pair("SMOD", "bvsmod"));
-
-  operator_mapping.insert(make_pair("EQ", "my_eq"));
-  operator_mapping.insert(make_pair("GT", "my_bvgt"));
-
-  operator_mapping.insert(make_pair("GE", "my_bvge"));
-  operator_mapping.insert(make_pair("LE", "my_bvle"));
-
-  operator_mapping.insert(make_pair("LT", "my_bvlt"));
-  operator_mapping.insert(make_pair("SGT", "my_bvsgt"));
-  operator_mapping.insert(make_pair("SLT", "my_bvslt"));
-  operator_mapping.insert(make_pair("ISZERO", "isZero"));
-  operator_mapping.insert(make_pair("ISNOTZERO", "isNotZero"));
-
-  operator_mapping.insert(make_pair("AND", "bvand"));
-  operator_mapping.insert(make_pair("OR", "bvor"));
-  operator_mapping.insert(make_pair("XOR", "bvxor"));
-  operator_mapping.insert(make_pair("SHL", "my_bvshl"));
-  operator_mapping.insert(make_pair("SHR", "my_bvlshr"));
-  operator_mapping.insert(make_pair("SAR", "my_bvashr"));
-  operator_mapping.insert(make_pair("NOT", "bvnot"));
-
-  operator_mapping.insert(make_pair("LAND", "my_land"));
-  operator_mapping.insert(make_pair("LOR", "my_lor"));
-  operator_mapping.insert(make_pair("LNOT", "my_lnot"));
-  /**
-   *  TODO :
-   * implement sha3 in smtlib ?
-   * For now, i use a constant function....
-   */
-  operator_mapping.insert(make_pair("SHA3", "sha3"));
-  operator_mapping.insert(make_pair("SHA3_1ARG", "sha3_1arg"));
-  operator_mapping.insert(make_pair("SHA3_2ARG", "sha3_2arg"));
-
-  operator_mapping.insert(make_pair("BYTE", "byte"));
-  operator_mapping.insert(make_pair("SIGNEXTEND", "signextend"));
-  operator_mapping.insert(make_pair("EXP", "my_exp"));
-
-  //  Quantifiers :
-  operator_mapping.insert(make_pair("EXISTS", "exists"));
-  operator_mapping.insert(make_pair("FORALL", "forall"));
-}
-
-string get_random_special_value() {
-  // string  out;
-  vector<string> pool, out;
-  pool.push_back(RANDOM_VALUE_0);
-  pool.push_back(RANDOM_VALUE_1);
-  pool.push_back(RANDOM_VALUE_2);
-  pool.push_back(RANDOM_VALUE_3);
-  pool.push_back(RANDOM_VALUE_4);
-  pool.push_back(RANDOM_VALUE_5);
-  pool.push_back(RANDOM_VALUE_6);
-
-  random_device rd;                                      // obtain a random number from hardware
-  mt19937 gen(rd());                                     // seed the generator
-  uniform_int_distribution<> distr(0, pool.size() - 1);  // define the range
-
-  int random_index = distr(gen);
-  return pool.at(random_index);
-}
-
-string make_constraint_for_bounded_var(string var) {
-  string value = get_random_special_value();
-  return "(assert (= " + var + " " + value + "))\n";
-}
-
-void traverse_model(solver smt_solver) {
-  z3::model model = smt_solver.get_model();
-  // traversing the model
-  for (unsigned i = 0; i < model.size(); i++) {
-    func_decl var = model[i];
-    // this problem contains only constants
-    assert(var.arity() == 0);
-    if (smt_debug) {
-      std::cerr << var.name() << " = " << model.get_const_interp(var) << std::endl;
-    }
-  }
-  // we can evaluate expressions in the model.
-  // std::cout << "x + y + 1 = " << m.eval(x + y + 1) << "\n";
-}
-
-void cleanup_and_insert(string id) {
-  string original_identifier = id;
-  // boost::remove_erase_if(id, boost::is_any_of(" .:'"));
-
-  boost::replace_all(id, " ", "space");
-  boost::replace_all(id, ".", "dot");
-  boost::replace_all(id, ":", "colon");
-  boost::replace_all(id, "'", "quote");
-
-  global_set_for_bounded_vars.insert(id);
-  global_set_for_vars.insert(id);
-  encoded_variable_names.insert(make_pair(id, original_identifier));
-}
-
-string parse_tree_expr_for_bounded_vars(souffle::SymbolTable *symbol_table, souffle::RecordTable *record_table, souffle::RamDomain arg) {
-  // We expect a sequence of 0 or more forall* quantifiers in the start of an
-  // expression and nowhere else
-
-  if (arg == 0) {
-    return "";
-  }
-
-  const souffle::RamDomain *my_tuple = record_table->unpack(arg, 3);
-
-  const souffle::RamDomain left = my_tuple[1];
-  const souffle::RamDomain right = my_tuple[2];
-  bool is_leaf = (left == 0 && right == 0);
-
-  string root_symbol = symbol_table->decode(my_tuple[0]);
-  if (is_leaf) {
-    if (root_symbol.rfind("0x", 0) == 0 && root_symbol.rfind("sv", 0) == 0) {
-      throw std::invalid_argument("cant bound constant");
-    } else {
-      return root_symbol;
-    }
-  }
-
-  if (root_symbol == "FORALLSTAR") {
-    string variable_to_bound = parse_tree_expr_for_bounded_vars(symbol_table, record_table, left);
-    // global_set_for_bounded_vars.insert(variable_to_bound);
-    cleanup_and_insert(variable_to_bound);
-    return parse_tree_expr_for_bounded_vars(symbol_table, record_table, right);
-  }
-
-  return "";
-}
-
-string parse_tree_expr(souffle::SymbolTable *symbol_table, souffle::RecordTable *record_table, souffle::RamDomain arg) {
-  if (arg == 0) {
-    return "";
-  }
-
-  const souffle::RamDomain *my_tuple = record_table->unpack(arg, 3);
-
-  const souffle::RamDomain left = my_tuple[1];
-  const souffle::RamDomain right = my_tuple[2];
-  bool is_leaf = (left == 0 && right == 0) || (symbol_table->decode(record_table->unpack(left, 3)[0]) == "");
-
-  string root_symbol = symbol_table->decode(my_tuple[0]);
-  DEBUG_MSG(root_symbol);
-  if (is_leaf) {
-    if (root_symbol.rfind("0x", 0) == 0) {
-//     uint256_t parsed_hex(root_symbol);
-#if BIT_VEC_LENGTH == 256
-      root_symbol = fix_length(root_symbol, 64);  // 64 lenght is for 256 bit vectors
-#else
-      root_symbol = fix_length(root_symbol, 8);  // 8 lenght is for 32 bit vectors
-#endif
-      // root_symbol = parsed_hex.str();
-      // replace 0x prefix with #x ....
-      root_symbol[0] = '#';
-    } else if (root_symbol == "") {
-      // this case may happen if the node is the right child of unary operator
-      ;  // do nothing
-    } else {
-      string original_var_name = root_symbol;
-      // remove special characters from vars
-      // boost::remove_erase_if(root_symbol, boost::is_any_of(" .:'"));
-      boost::replace_all(root_symbol, " ", "space");
-      boost::replace_all(root_symbol, ".", "dot");
-      boost::replace_all(root_symbol, ":", "colon");
-      boost::replace_all(root_symbol, "'", "quote");
-
-      global_set_for_vars.insert(root_symbol);
-      encoded_variable_names.insert(make_pair(root_symbol, original_var_name));
-    }
-  }
-
-  if (root_symbol == "FORALLSTAR") {
-    parse_tree_expr(symbol_table, record_table,
-                    left);  // to add "bounded" variable in globalSetVars
-    return parse_tree_expr(symbol_table, record_table, right);
-  }
-
-  if (root_symbol == "FORALL") {
-    // "(forall ((x (_ BitVec 256))) P)"
-    string lsymbol = parse_tree_expr(symbol_table, record_table, left);
-    string rexpr = parse_tree_expr(symbol_table, record_table, right);
-#if BIT_VEC_LENGTH == 256
-    // string ans = "(forall (("+lsymbol+" (_ BitVec 256))) "+ rexpr+")";
-    string ans = "(ite (forall ((" + lsymbol + " (_ BitVec 256))) (=  " + std::string(SMTLIB_TRUE_VAL) + " " + rexpr + ") )" + std::string(SMTLIB_TRUE_VAL) +
-                 " " + std::string(SMTLIB_FALSE_VAL) + "  )";
-#else
-    // string ans = "(forall ((" + lsymbol + " (_ BitVec 32))) " + rexpr + ")";
-    string ans = "(ite (forall ((" + lsymbol + " (_ BitVec 256))) (=  " + std::string(SMTLIB_TRUE_VAL) + " " + rexpr + ") )" + std::string(SMTLIB_TRUE_VAL) +
-                 " " + std::string(SMTLIB_FALSE_VAL) + "  )";
-#endif
-    return ans;
-  }
-
-  if (root_symbol == "EXISTS") {
-    // "(exists ((x (_ BitVec 256))) P)"
-    string lsymbol = parse_tree_expr(symbol_table, record_table, left);
-    string rexpr = parse_tree_expr(symbol_table, record_table, right);
-#if BIT_VEC_LENGTH == 256
-    // string ans = "(exists (("+lsymbol+" (_ BitVec 256))) "+ rexpr+")";
-    string ans = "(ite (exists ((" + lsymbol + " (_ BitVec 256))) (=  " + std::string(SMTLIB_TRUE_VAL) + " " + rexpr + ") )" + std::string(SMTLIB_TRUE_VAL) +
-                 " " + std::string(SMTLIB_FALSE_VAL) + "  )";
-#else
-    // string ans = "(exists ((" + lsymbol + " (_ BitVec 32))) " + rexpr + ")";
-    string ans = "(ite (exists ((" + lsymbol + " (_ BitVec 32))) (=  " + std::string(SMTLIB_TRUE_VAL) + " " + rexpr + ") )" + std::string(SMTLIB_TRUE_VAL) +
-                 " " + std::string(SMTLIB_FALSE_VAL) + "  )";
-#endif
-    return ans;
-  }
-
-  string lexpr = parse_tree_expr(symbol_table, record_table, left);
-  string rexpr = parse_tree_expr(symbol_table, record_table, right);
-  string ans;
-  if (is_leaf) {
-    ans = root_symbol;
-    ans = ans + " ";
-  } else {
-    string op = operator_mapping.at(root_symbol);
-    if (isPredefinedFunction(op)) {
-      ans = "(" + op + " " + lexpr;
-      ans = ans + " " + rexpr + ")";
-    } else {
-      // inlining the user-definfed functions
-      ans = inline_user_defined_function(op, lexpr, rexpr);
-    }
-  }
-  return ans;
-}
-
-void add_bounded_variables(souffle::SymbolTable *symbol_table, souffle::RecordTable *record_table, souffle::RamDomain arg_bound_vars) {
-  string current_id;
-  if (arg_bound_vars == 0) {
-    return;
-  }
-  const souffle::RamDomain *my_tuple = record_table->unpack(arg_bound_vars, 2);
-  current_id = symbol_table->decode(my_tuple[0]);
-  cleanup_and_insert(current_id);
-  while (true) {
-    if (my_tuple[1] == 0) {
-      break;
-    }
-    my_tuple = record_table->unpack(my_tuple[1], 2);
-    current_id = symbol_table->decode(my_tuple[0]);
-    cleanup_and_insert(current_id);
-  }
-}
-
-bool is_op_string(string v) {
-  std::map<string, string>::iterator it = operator_mapping.find(v);
-  if (it != operator_mapping.end()) {
-    return true;
-  }
-  return false;
-}
-
-bool is_symbolic_var(string v) {
-  // exclude from symbolic vars strings starting with "0x", AKA constants
-  if (v == "") {
-    return false;
-  }
-  if (is_op_string(v)) {
-    return false;
-  }
-  return (v.rfind("0x", 0) != 0);
-}
-
-void handle_let_used_vars(souffle::SymbolTable *symbol_table, souffle::RecordTable *record_table, souffle::RamDomain rside) {
-  const souffle::RamDomain *rside_unpacked = record_table->unpack(rside, 3);
-  string x0 = symbol_table->decode(rside_unpacked[0]);
-  string x1 = (rside_unpacked[1] == 0) ? "" : symbol_table->decode(record_table->unpack(rside_unpacked[1], 3)[0]);
-  string x2 = (rside_unpacked[2] == 0) ? "" : symbol_table->decode(record_table->unpack(rside_unpacked[2], 3)[0]);
-
-  if (is_symbolic_var(x0)) {
-    global_set_let_uses.insert(x0);
-  }
-  if (is_symbolic_var(x1)) {
-    global_set_let_uses.insert(x1);
-  }
-  if (is_symbolic_var(x2)) {
-    global_set_let_uses.insert(x2);
-  }
-}
-
-int calculate_let_exprs_length(souffle::SymbolTable *symbol_table, souffle::RecordTable *record_table, souffle::RamDomain let_expr_list) {
-  if (let_expr_list == 0) {
-    return 0;
-  }
-  const souffle::RamDomain *my_tuple = record_table->unpack(let_expr_list, 2);
-  const souffle::RamDomain *top_element_unpacked = record_table->unpack(my_tuple[0], 2);
-  if (symbol_table->decode(top_element_unpacked[0]).rfind("0x", 0) == 0) {
-    return calculate_let_exprs_length(symbol_table, record_table, my_tuple[1]);
-  }
-  return 1 + calculate_let_exprs_length(symbol_table, record_table, my_tuple[1]);
-}
-
-string print_let_exprs(souffle::SymbolTable *symbol_table, souffle::RecordTable *record_table, souffle::RamDomain let_expr_list) {
-  if (let_expr_list == 0) {
-    return "";
-  }
-  const souffle::RamDomain *top_element = record_table->unpack(let_expr_list, 2);
-  const souffle::RamDomain *top_element_unpacked = record_table->unpack(top_element[0], 2);
-  string rside = parse_tree_expr(symbol_table, record_table, top_element_unpacked[1]);
-  string let_def_var = symbol_table->decode(top_element_unpacked[0]);
-  if (let_def_var.rfind("0x", 0) == 0) {
-    return print_let_exprs(symbol_table, record_table, top_element[1]);
-  }
-
-  global_set_let_defines.insert(let_def_var);
-  handle_let_used_vars(symbol_table, record_table, top_element_unpacked[1]);
-
-  string top_let_str = "(let ((" + let_def_var + " " + rside + ")) \n";
-
-  //  change the order of addition to reverse the order of lets!
-  //  return top_let_str + print_let_exprs(symbol_table, record_table, top_element[1]);
-  return print_let_exprs(symbol_table, record_table, top_element[1]) + top_let_str;
-}
-
-string find_best_logic(string smtlib_query) {
-  vector<string> words_in_query;
-  boost::split(words_in_query, smtlib_query, boost::is_any_of(" \t\n()"));
-  bool has_quantifier = false;
-  for (auto w : words_in_query) {
-    if (w == "int2bv" || w == "bv2int" || w == "to_int") {
-      return "(set-logic ALL)\n";
-    }
-    if (w == "forall" || w == "exists") {
-      has_quantifier = true;
-    }
-  }
-  if (has_quantifier) {
-    return "(set-logic BV)\n";
-  } else {
-    return "(set-logic QF_BV)\n";
-  }
-  return "(set-logic ALL)\n";
-}
-
-// thread_local: per-thread cache (see note at the top of the extern "C" block).
-thread_local std::map<pair<std::string, set<std::string>>, souffle::RamDomain> cache_print_to_smt_style;
-
-/**
- * Implement smt-lib mapping!
- */
-souffle::RamDomain print_to_smt_style(souffle::SymbolTable *symbol_table, souffle::RecordTable *record_table, souffle::RamDomain arg,
-                                      souffle::RamDomain arg_bound_vars, souffle::RamDomain let_expr_list) {
-  // global sets have to be cleared in every print_to_smt call, since we
-  // bound
-  global_set_for_bounded_vars.clear();
-  global_set_for_vars.clear();
-
-  assert(symbol_table && "NULL symbol table");
-  assert(record_table && "NULL record table");
-
-  global_set_for_vars.clear();
-  global_set_for_bounded_vars.clear();
-
-  global_set_let_defines.clear();
-  global_set_let_uses.clear();
-
-  populate_operator_mapping();
-
-  string out = parse_tree_expr(symbol_table, record_table, arg);
-  parse_tree_expr_for_bounded_vars(symbol_table, record_table, arg);
-
-  add_bounded_variables(symbol_table, record_table, arg_bound_vars);
-
-  string declarations = "";
-  for (string s : global_set_for_vars) {
-#if BIT_VEC_LENGTH == 256
-    declarations += "(declare-const " + s + " (_ BitVec 256))\n";
-#else
-    declarations += "(declare-const " + s + " (_ BitVec 32))\n";
-#endif
-  }
-
-  std::set<string> temp_set_for_vars = global_set_for_vars;
-
-  const souffle::RamDomain *my_tuple = record_table->unpack(arg, 3);
-  string root_symbol = symbol_table->decode(my_tuple[0]);
-
-  string result;
-  string let_exprs = print_let_exprs(symbol_table, record_table, let_expr_list);
-
-  int let_length = calculate_let_exprs_length(symbol_table, record_table, let_expr_list);
-  string let_declarations = "";
-  for (string s : global_set_let_uses) {
-    if (temp_set_for_vars.find(s) != temp_set_for_vars.end()) {
-      // already declared
-      continue;
-    }
-
-#if BIT_VEC_LENGTH == 256
-    let_declarations += "(declare-const " + s + " (_ BitVec 256))\n";
-#else
-    let_declarations += "(declare-const " + s + " (_ BitVec 32))\n";
-#endif
-  }
-  result =
-      declarations + let_declarations + "( assert " + let_exprs + " (= " + SMTLIB_TRUE_VAL + " " + out + ") " + repeat_symbol_n_times(")", let_length) + " )\n";
-  string result_with_constraints = result;
-
-  pair<std::string, set<std::string>> key = make_pair(result_with_constraints, global_set_for_bounded_vars);
-
-  if (cache_print_to_smt_style.find(key) != cache_print_to_smt_style.end()) {
-    // we have already made this computation once!
-    return cache_print_to_smt_style.at(key);
-  }
-
-  for (string s : global_set_for_bounded_vars) {
-    result_with_constraints += make_constraint_for_bounded_var(s);
-  }
-  string result_with_constraints_and_logic = find_best_logic(result_with_constraints) + result_with_constraints;
-  souffle::RamDomain encoded_result = symbol_table->encode(result_with_constraints_and_logic);
-  cache_print_to_smt_style[key] = encoded_result;
-  return encoded_result;
-}
-
-const char *smt_response_simple(const char *query) {
-  z3::context ctx;
-  z3::solver smt_solver(ctx);
-
-  smt_solver.from_string(query);
-  const char *result;
-  switch (smt_solver.check()) {
-    case unsat:
+const char* smt_response_simple(const char* query) {
+  z3::context local_ctx;
+  z3::solver local_solver(local_ctx);
+  local_solver.from_string(query);
+
+  const char* result;
+  switch (local_solver.check()) {
+    case z3::unsat:
       result = "unsat";
       break;
-    case sat:
-      traverse_model(smt_solver);
+    case z3::sat:
+      traverse_model(local_solver);
       result = "sat";
       break;
     default:
       result = "unknown";
       break;
   }
-  if (smt_debug) {
-    std::cerr << query << "(check-sat) ; " << result << std::endl;
-  }
+  if (smt_debug) std::cerr << query << "(check-sat) ; " << result << std::endl;
   return result;
 }
 
-souffle::RamDomain id_model(souffle::SymbolTable *symbol_table, souffle::RecordTable *record_table, souffle::RamDomain arg) {
-  assert(symbol_table && "NULL symbol table");
-  assert(record_table && "NULL record table");
-  // Argument is a list element [x, l] where
-  // x is a number and l is another list element
-  const souffle::RamDomain *my_tuple = record_table->unpack(arg, 2);
-  // This is ugly and error-prone.  We should provide a higher-level API which
-  // understands the internal data representation for ADTs
-  const souffle::RamDomain *model_tuple = record_table->unpack(my_tuple[1], 2);
-  cout << my_tuple[0] << " - " << symbol_table->decode(my_tuple[0]) << " - " << ((my_tuple[1] == 0) ? 0 : my_tuple[1]) << "\n";
-
-  souffle::RamDomain model = my_tuple[1];
-  // while (true) {
-  //     if (model == 0) {
-  //         break;
-  //     }
-
-  //     const souffle::RamDomain* model2 = record_table->unpack(model, 2);
-  //     const souffle::RamDomain* model_entry = record_table->unpack(model2[0],
-  //     2);
-
-  //     cout << "Model : " << symbol_table->decode(model_entry[0]) << " has
-  //     value "  <<  model_entry[1]  << "\n";
-
-  //     model  = model2[1];
-  // }
-
-  if (my_tuple[1] == 0) {
-    return record_table->pack(&my_tuple[0], 2);
-  }
-
-  souffle::RamDomain fixed_entry[2] = {symbol_table->encode("c"), 333};
-  souffle::RamDomain model2[2];
-  model2[0] = record_table->pack(fixed_entry, 2);
-  model2[1] = 0;
-
-  souffle::RamDomain res[2];
-  res[0] = symbol_table->encode("sat");
-  res[1] = record_table->pack(&model2[0], 2);
-  return record_table->pack(&res[0], 2);
-}
-}
+}  // extern "C"
