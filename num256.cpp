@@ -44,6 +44,14 @@ extern "C" {
     return out;
   }
 
+  const char* hex_to_decimal_str(const char *x) {
+    thread_local static char out[82] = {""};
+    uint256_t my_x(x);
+    string strNum = my_x.str();
+    strcpy(out, strNum.c_str());
+    return out;
+  }
+
   int32_t max2(int32_t x, int32_t y) {
     return x < y ? y : x;
   }
@@ -66,13 +74,13 @@ extern "C" {
     return strs;
   }
 
-  int32_t in_set(const char *x, const char *y) {
+  int32_t in_set_legacy(const char *x, const char *y) {
     string y_str(y);
     set<string> strs = from_chars(x);
     return strs.find(y_str) != strs.end();
   }
 
-  const char* add_set(const char *x, const char *y) {
+  const char* add_set_legacy(const char *x, const char *y) {
     string y_str(y);
     set<string> strs = from_chars(x);
     if (strs.find(y_str) != strs.end()) return x;
@@ -83,7 +91,7 @@ extern "C" {
     return out;
   }
 
-  int32_t len_set(const char *x) {
+  int32_t len_set_legacy(const char *x) {
     char c = *x;
     int32_t res = c != 0;
     do { 

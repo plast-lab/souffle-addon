@@ -63,13 +63,19 @@ extern "C"
     return out_str;
   }
 
+  /**
+    Converts to string, with a maximum of 3 words.
+    Can rewrite as a stateful functor to avoid this limitation, may do it in the future.
+  */
   const char* hex_to_str(const char* input) {
-    thread_local static char* out = (char*) malloc(sizeof(char) * (strlen(input)/2));
+    thread_local static char out[97] = {};
 
-    for (int i = 1; i < strlen(input)/2; i++){
+    const size_t in_len = strlen(input)/2;
+    const size_t out_len = in_len > 97 ? 97 : in_len;
+    for (int i = 1; i < out_len; i++){
         out[i - 1] = hex_to_num(input[2*i])*16 + hex_to_num(input[2*i + 1]);
     }
-    out[strlen(input)/2 - 1] = '\0';
+    out[out_len - 1] = '\0';
 
     return out;
   }
