@@ -22,17 +22,25 @@
 // Debug helpers
 // ------------------------------------------------------------------------
 
-// #define DEBUG 1
+#define DEBUG 1
+#define DEBUG_LOG_FILE "/tmp/souffle_functor_debug.log"
+
 #ifdef DEBUG
-#define DEBUG_MSG(str)             \
-  do {                             \
-    std::cout << str << std::endl; \
-  } while (false)
+#include <fstream>
+#include <mutex>
+static void debug_log(const std::string& str) {
+  static std::mutex m;
+  std::lock_guard<std::mutex> lock(m);
+  std::ofstream log(DEBUG_LOG_FILE, std::ios::app);
+  log << str << std::endl;
+}
+#define DEBUG_MSG(str) debug_log(str)
 #else
 #define DEBUG_MSG(str) \
   do {                 \
   } while (false)
 #endif
+
 
 // Width of every bit-vector in the encoding. EVM words are 256-bit; the 32-bit
 // branch exists only for quick local experiments.
@@ -425,10 +433,13 @@ souffle::RamDomain smt_response_with_model(souffle::SymbolTable* symbol_table, s
   z3::check_result verdict = parse_ok ? smt_solver.check() : z3::unknown;
   const char* tag = (verdict == z3::unsat) ? "unsat" : (verdict == z3::sat) ? "sat" : "unknown";
 
+  DEBUG_MSG(std::string("Result: ") + tag);
+
   std::vector<souffle::RamDomain> assignments;
   souffle::RamDomain res[2];
   res[0] = symbol_table->encode(tag);
   if (verdict == z3::sat) {
+    DEBUG_MSG(std::string("Model: ") + smt_solver.get_model().to_string());
     assignments = model_entries(smt_solver, symbol_table, record_table);
     res[1] = to_model_list(assignments, record_table);
   } else {
