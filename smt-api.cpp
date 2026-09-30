@@ -23,7 +23,7 @@
 // ------------------------------------------------------------------------
 
 #define DEBUG_LOG_FILE "/tmp/souffle_functor_debug.log"
-  
+
 #include <fstream>
 #include <mutex>
 static void debug_log(const std::string& str) {
@@ -34,11 +34,10 @@ static void debug_log(const std::string& str) {
 }
 // str is only evaluated when SMT_TRACE is set -- it's inside the `if`, so an
 // expensive argument (e.g. a full model dump) is never built when tracing is off.
-#define DEBUG_MSG(str)              \
-  do {                              \
-    if (smt_trace) debug_log(str);  \
+#define DEBUG_MSG(str)             \
+  do {                             \
+    if (smt_trace) debug_log(str); \
   } while (false)
-
 
 // Width of every bit-vector in the encoding. EVM words are 256-bit; the 32-bit
 // branch exists only for quick local experiments.
@@ -69,6 +68,7 @@ static const bool smt_debug = std::getenv("SMT_DEBUG") != nullptr;
 // request/response call-sequence trace -- when SMT_TRACE is set in the
 // environment. Off by default: no disk writes, no per-call overhead.
 static const bool smt_trace = std::getenv("SMT_TRACE") != nullptr;
+
 // ------------------------------------------------------------------------
 // Per-thread Z3 state
 //
@@ -88,75 +88,68 @@ static thread_local std::map<std::pair<std::string, std::set<std::string>>, souf
 
 namespace {
 
-  // Debug: dump the raw (untranslated) expression tree, for cross-build
-  // chronological tracking. No mangling, no z3 involvement -- directly comparable across builds.
-  std::string dump_raw_tree(souffle::SymbolTable* st, souffle::RecordTable* rt, souffle::RamDomain node) {
-    if (node == 0) return "nil";
-    const souffle::RamDomain* t = rt->unpack(node, 3);
-    std::string base = st->decode(t[0]);
-    if (t[1] == 0 && t[2] == 0) return base;
-    return "(" + base + " " + dump_raw_tree(st, rt, t[1]) + " " + dump_raw_tree(st, rt, t[2]) + ")";
-  } 
+// Debug: dump the raw (untranslated) expression tree, for cross-build
+// chronological tracking. No mangling, no z3 involvement -- directly comparable across builds.
+std::string dump_raw_tree(souffle::SymbolTable* st, souffle::RecordTable* rt, souffle::RamDomain node) {
+  if (node == 0) return "nil";
+  const souffle::RamDomain* t = rt->unpack(node, 3);
+  std::string base = st->decode(t[0]);
+  if (t[1] == 0 && t[2] == 0) return base;
+  return "(" + base + " " + dump_raw_tree(st, rt, t[1]) + " " + dump_raw_tree(st, rt, t[2]) + ")";
+}
 
-  std::string dump_bound_vars(souffle::SymbolTable* st, souffle::RecordTable* rt, souffle::RamDomain node) {
-    std::string out = "[";
-    bool first = true;
-    while (node != 0) {
-      const souffle::RamDomain* c = rt->unpack(node, 2);
-      if (!first) out += ",";
-      out += st->decode(c[0]);
-      first = false;
-      node = c[1];
-    } 
-    return out + "]";
-  }   
+std::string dump_bound_vars(souffle::SymbolTable* st, souffle::RecordTable* rt, souffle::RamDomain node) {
+  std::string out = "[";
+  bool first = true;
+  while (node != 0) {
+    const souffle::RamDomain* c = rt->unpack(node, 2);
+    if (!first) out += ",";
+    out += st->decode(c[0]);
+    first = false;
+    node = c[1];
+  }
+  return out + "]";
+}
 
+unsigned long log_call_sequence(souffle::SymbolTable* st, souffle::RecordTable* rt, souffle::RamDomain arg, souffle::RamDomain arg_bound_vars) {
+  if (!smt_trace) return 0;
+  static const char* path = "/tmp/smt_call_sequence_after.log";
+  static std::mutex m;
+  static unsigned long counter = 0;
+  std::lock_guard<std::mutex> lock(m);
+  unsigned long id = ++counter;
+  std::ofstream log(path, std::ios::app);
+  log << "#" << id << " REQUEST x=" << dump_raw_tree(st, rt, arg) << " bound=" << dump_bound_vars(st, rt, arg_bound_vars) << std::endl;
+  return id;
+}
 
-  // CHANGED: now returns the call id (was void)
-  unsigned long log_call_sequence(souffle::SymbolTable* st, souffle::RecordTable* rt,
-                                  souffle::RamDomain arg, souffle::RamDomain arg_bound_vars) {
-    if (!smt_trace) return 0;
-    static const char* path = "/tmp/smt_call_sequence_after.log";
-    static std::mutex m;          
-    static unsigned long counter = 0;
-    std::lock_guard<std::mutex> lock(m);
-    unsigned long id = ++counter;
-    std::ofstream log(path, std::ios::app);
-    log << "#" << id << " REQUEST x=" << dump_raw_tree(st, rt, arg)
-        << " bound=" << dump_bound_vars(st, rt, arg_bound_vars) << std::endl;
-    return id; 
-  }     
-    
-  // NEW
-  std::string format_model(souffle::SymbolTable* st, souffle::RecordTable* rt, souffle::RamDomain model_list) {
-    std::string out;
-    while (model_list != 0) {
-      const souffle::RamDomain* cell = rt->unpack(model_list, 2);
-      const souffle::RamDomain* entry = rt->unpack(cell[0], 2);
-      if (!out.empty()) out += " ";
-      out += st->decode(entry[0]) + "=" + st->decode(entry[1]);
-      model_list = cell[1]; 
-    } 
-    return out;
-  } 
-    
-  // NEW
-  void log_response(unsigned long call_id, const std::string& tag, const std::string& model = "") {
-    if (!smt_trace) return;
-    static const char* path = "/tmp/smt_call_sequence_after.log";
-    static std::mutex m;
-    std::lock_guard<std::mutex> lock(m);
-    std::ofstream log(path, std::ios::app);
-    log << "#" << call_id << " RESPONSE " << tag;
-    if (!model.empty()) log << " model=[" << model << "]";
-    log << std::endl;
-  } 
-    
-  // NEW
-  unsigned long extract_call_id(const std::string& query) {
-    if (query.rfind("; call #", 0) != 0) return 0;
-    return std::strtoul(query.c_str() + 8, nullptr, 10);
-  } 
+std::string format_model(souffle::SymbolTable* st, souffle::RecordTable* rt, souffle::RamDomain model_list) {
+  std::string out;
+  while (model_list != 0) {
+    const souffle::RamDomain* cell = rt->unpack(model_list, 2);
+    const souffle::RamDomain* entry = rt->unpack(cell[0], 2);
+    if (!out.empty()) out += " ";
+    out += st->decode(entry[0]) + "=" + st->decode(entry[1]);
+    model_list = cell[1];
+  }
+  return out;
+}
+
+void log_response(unsigned long call_id, const std::string& tag, const std::string& model = "") {
+  if (!smt_trace) return;
+  static const char* path = "/tmp/smt_call_sequence_after.log";
+  static std::mutex m;
+  std::lock_guard<std::mutex> lock(m);
+  std::ofstream log(path, std::ios::app);
+  log << "#" << call_id << " RESPONSE " << tag;
+  if (!model.empty()) log << " model=[" << model << "]";
+  log << std::endl;
+}
+
+unsigned long extract_call_id(const std::string& query) {
+  if (query.rfind("; call #", 0) != 0) return 0;
+  return std::strtoul(query.c_str() + 8, nullptr, 10);
+}
 
 // ------------------------------------------------------------------------
 // Small utilities
@@ -175,8 +168,7 @@ std::string change_representation(const std::string& smt_bv_constant) {
 // One of a small fixed pool of "random-ish" constants, used to pin
 // FORALLSTAR-bound and caller-listed variables to a concrete value.
 std::string get_random_special_value() {
-  static const std::string pool[] = {RANDOM_VALUE_0, RANDOM_VALUE_1, RANDOM_VALUE_2, RANDOM_VALUE_3,
-                                     RANDOM_VALUE_4, RANDOM_VALUE_5, RANDOM_VALUE_6};
+  static const std::string pool[] = {RANDOM_VALUE_0, RANDOM_VALUE_1, RANDOM_VALUE_2, RANDOM_VALUE_3, RANDOM_VALUE_4, RANDOM_VALUE_5, RANDOM_VALUE_6};
   static thread_local std::mt19937 gen{std::random_device{}()};
   std::uniform_int_distribution<std::size_t> pick(0, (sizeof(pool) / sizeof(pool[0])) - 1);
   return pool[pick(gen)];
@@ -265,8 +257,7 @@ struct Translator {
     return val;
   }
 
-  z3::expr translate(souffle::SymbolTable* st, souffle::RecordTable* rt, souffle::RamDomain node,
-                     const std::map<std::string, z3::expr>& bound) {
+  z3::expr translate(souffle::SymbolTable* st, souffle::RecordTable* rt, souffle::RamDomain node, const std::map<std::string, z3::expr>& bound) {
     if (node == 0) throw std::runtime_error("smt-api: unexpected nil expression node");
 
     const souffle::RamDomain* t = rt->unpack(node, 3);
@@ -320,9 +311,9 @@ struct Translator {
     if (base == "AND") return L & R;
     if (base == "OR") return L | R;
     if (base == "XOR") return L ^ R;
-    if (base == "NOT") return ~L;       // unary
-    if (base == "UNOP_NEG") return -L;  // unary
-    if (base == "SHL") return z3::shl(R, L);   // shift amount is the LEFT child
+    if (base == "NOT") return ~L;             // unary
+    if (base == "UNOP_NEG") return -L;        // unary
+    if (base == "SHL") return z3::shl(R, L);  // shift amount is the LEFT child
     if (base == "SHR") return z3::lshr(R, L);
     if (base == "SAR") return z3::ashr(R, L);
     if (base == "EQ") return truthy(L == R);
@@ -331,8 +322,8 @@ struct Translator {
     if (base == "LT") return truthy(z3::ult(L, R));
     if (base == "GE") return truthy(z3::uge(L, R));
     if (base == "LE") return truthy(z3::ule(L, R));
-    if (base == "SGT") return truthy(L > R);  // signed
-    if (base == "SLT") return truthy(L < R);  // signed
+    if (base == "SGT") return truthy(L > R);                                  // signed
+    if (base == "SLT") return truthy(L < R);                                  // signed
     if (base == "ISZERO" || base == "UNOP_ISZERO") return truthy(L == zero);  // unary
     if (base == "ISNOTZERO") return truthy(L != zero);                        // unary
     if (base == "LAND") return z3::ite(L == zero, zero, z3::ite(R == zero, zero, one));
@@ -451,10 +442,9 @@ void traverse_model(z3::solver& solver) {
 
 extern "C" {
 
-souffle::RamDomain print_to_smt_style(souffle::SymbolTable* symbol_table, souffle::RecordTable* record_table,
-                                      souffle::RamDomain arg, souffle::RamDomain arg_bound_vars,
-                                      souffle::RamDomain let_expr_list) {
-  unsigned long call_id = log_call_sequence(symbol_table, record_table, arg, arg_bound_vars);   // CHANGED: capture id
+souffle::RamDomain print_to_smt_style(souffle::SymbolTable* symbol_table, souffle::RecordTable* record_table, souffle::RamDomain arg,
+                                      souffle::RamDomain arg_bound_vars, souffle::RamDomain let_expr_list) {
+  unsigned long call_id = log_call_sequence(symbol_table, record_table, arg, arg_bound_vars);
   assert(symbol_table && "NULL symbol table");
   assert(record_table && "NULL record table");
 
@@ -479,18 +469,14 @@ souffle::RamDomain print_to_smt_style(souffle::SymbolTable* symbol_table, souffl
   auto hit = cache_print_to_smt_style.find(key);
   if (hit != cache_print_to_smt_style.end()) return hit->second;
 
-  // std::string full = "; call #" + std::to_string(call_id) + "\n" + base + tr.render_pins();   // CHANGED: embed id
-  std::string full = smt_trace ? ("; call #" + std::to_string(call_id) + "\n" + base + tr.render_pins())
-                               : (base + tr.render_pins());
+  std::string full = smt_trace ? ("; call #" + std::to_string(call_id) + "\n" + base + tr.render_pins()) : (base + tr.render_pins());
   souffle::RamDomain encoded = symbol_table->encode(full);
   cache_print_to_smt_style.emplace(std::move(key), encoded);
   return encoded;
 }
 
-souffle::RamDomain smt_response_with_model(souffle::SymbolTable* symbol_table, souffle::RecordTable* record_table,
-                                          souffle::RamDomain text) {
+souffle::RamDomain smt_response_with_model(souffle::SymbolTable* symbol_table, souffle::RecordTable* record_table, souffle::RamDomain text) {
   const std::string& query = symbol_table->decode(text);
-  // unsigned long call_id = extract_call_id(query);   // NEW
   unsigned long call_id = smt_trace ? extract_call_id(query) : 0;
 
   auto cached = cache_smt_response_with_model.find(query);
@@ -499,9 +485,9 @@ souffle::RamDomain smt_response_with_model(souffle::SymbolTable* symbol_table, s
       const souffle::RamDomain* r = record_table->unpack(cached->second, 2);
       std::string cached_tag = symbol_table->decode(r[0]);
       log_response(call_id, cached_tag, cached_tag == "sat" ? format_model(symbol_table, record_table, r[1]) : "");
-    } 
+    }
     return cached->second;
-  } 
+  }
 
   DEBUG_MSG(query);
 
@@ -529,7 +515,6 @@ souffle::RamDomain smt_response_with_model(souffle::SymbolTable* symbol_table, s
   } else {
     res[1] = 0;
   }
-  // log_response(call_id, tag, (verdict == z3::sat) ? format_model(symbol_table, record_table, res[1]) : "");   // NEW
   if (smt_trace) {
     log_response(call_id, tag, (verdict == z3::sat) ? format_model(symbol_table, record_table, res[1]) : "");
   }
